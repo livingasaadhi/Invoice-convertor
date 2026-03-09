@@ -21,7 +21,7 @@ export default function CurrencySelector({
 }: CurrencySelectorProps) {
   return (
     <div>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+      <h2 className="mb-2 text-[14px] font-medium text-[#6B7280]">
         Convert To
       </h2>
       <motion.div
@@ -32,7 +32,7 @@ export default function CurrencySelector({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full cursor-pointer appearance-none rounded-xl border-[1.5px] border-gray-200 bg-white px-4 py-3.5 pr-10 text-sm font-medium text-gray-800 shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 hover:border-indigo-300"
+          className="w-full cursor-pointer appearance-none rounded-[12px] border border-[#E5E7EB] bg-[#FFFFFF] px-4 py-3 pr-10 text-[16px] text-[#111827] transition-all hover:border-[#D1D5DB] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
         >
           <option value="" disabled>
             Select a currency
@@ -45,7 +45,7 @@ export default function CurrencySelector({
         </select>
         {/* Chevron */}
         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
-          <ChevronDown className="h-4 w-4 text-gray-400 transition-transform duration-200 group-hover:text-indigo-500" />
+          <ChevronDown className="h-5 w-5 text-[#9CA3AF]" strokeWidth={1.5} />
         </div>
       </motion.div>
     </div>

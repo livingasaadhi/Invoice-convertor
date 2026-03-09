@@ -20,35 +20,29 @@ export default function ConvertButton({
       disabled={disabled || isLoading}
       onClick={onClick}
       className={`
-        group relative w-full overflow-hidden rounded-xl px-6 py-4 text-sm font-semibold text-white shadow-lg
-        transition-colors duration-300 ease-out
+        w-full rounded-[12px] px-6 py-4 text-[16px] font-medium text-white
+        transition-colors duration-200 ease-in-out
         ${
           disabled || isLoading
-            ? "cursor-not-allowed bg-indigo-300 shadow-none"
-            : "bg-indigo-600 shadow-indigo-500/30 hover:bg-indigo-500 hover:shadow-indigo-500/40"
+            ? "cursor-not-allowed bg-indigo-300"
+            : "bg-[#4F46E5] hover:bg-[#4338CA]"
         }
       `}
     >
-      {/* Shimmer effect on hover */}
-      {!disabled && !isLoading && (
-        <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-      )}
-
-      <span className="relative flex items-center justify-center gap-2">
+      <span className="flex items-center justify-center gap-2">
         {isLoading ? (
           <>
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
             >
-              <Loader2 className="h-5 w-5 text-white/90" />
+              <Loader2 className="h-5 w-5 text-white" strokeWidth={2} />
             </motion.div>
             Converting…
           </>
         ) : (
           <>
-            <ArrowRightLeft className="h-5 w-5 text-white/90" />
-            Convert Invoice
+            Convert invoice
           </>
         )}
       </span>

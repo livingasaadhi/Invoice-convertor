@@ -136,44 +136,36 @@ export default function Home() {
   const canConvert = !!uploadedFile && !!selectedCurrency;
 
   return (
-    <div className="flex min-h-screen items-center justify-center overflow-x-hidden bg-[#fafafa] px-4 py-8 selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="flex min-h-screen flex-col items-center justify-center overflow-x-hidden bg-[#F8FAFC] px-4 py-8">
       <div className="w-full max-w-5xl">
-        {/* ── Header ── */}
+        {/* ── Header / Logo ── */}
         <motion.header
           initial={{ opacity: 0, scale: 0.95, y: -20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
-          className="mb-8 text-center"
+          className="mb-8 text-center flex flex-col items-center"
         >
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-600 shadow-xl shadow-indigo-500/20 ring-1 ring-white/50">
-            <svg
-              className="h-7 w-7 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
+          {/* Logo */}
+          <div className="mb-4 flex items-center justify-center gap-2">
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-[#E5E7EB]">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute -ml-2 -mt-1"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute bottom-2 right-2 bg-white rounded-full"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-            Invoice Currency Converter
+          <h1 className="text-[28px] sm:text-[36px] font-bold text-[#111827] leading-tight mb-3">
+            Convert rupee invoices into global currencies instantly.
           </h1>
-          <p className="mt-2 text-sm md:text-base font-medium text-gray-500">
-            Upload an INR invoice and convert it seamlessly to another currency.
+          <p className="text-[14px] sm:text-[16px] text-[#6B7280] max-w-lg mx-auto">
+            Upload a PDF invoice, choose a currency, and download the converted version in seconds.
           </p>
         </motion.header>
 
-        {/* ── Main Layout ── */}
+        {/* ── Main Layout (Two Column) ── */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="show"
-          className="rounded-[24px] border border-gray-100 bg-white/70 p-6 shadow-xl shadow-gray-200/50 backdrop-blur-xl sm:p-8 lg:p-10 ring-1 ring-gray-900/5"
+          className="rounded-[16px] border border-[#E5E7EB] bg-[#FFFFFF] p-6 sm:p-8 lg:p-10 shadow-sm"
         >
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
             
@@ -181,8 +173,8 @@ export default function Home() {
             <div className="flex flex-col space-y-8">
               <motion.div variants={itemVariants}>
                 <div className="mb-4 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600">1</span>
-                  <h2 className="text-lg font-semibold text-gray-900">Upload Invoice</h2>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4F46E5]/10 text-[12px] font-bold text-[#4F46E5]">1</span>
+                  <h2 className="text-[16px] font-semibold text-[#111827]">Upload invoice</h2>
                 </div>
                 <UploadDropzone
                   onFileUpload={handleFileUpload}
@@ -193,11 +185,11 @@ export default function Home() {
                 />
               </motion.div>
 
-              <motion.hr variants={itemVariants} className="border-gray-100" />
+              <motion.hr variants={itemVariants} className="border-[#E5E7EB]" />
 
               <motion.div variants={itemVariants}>
                 <AmountDisplay
-                  label="Detected Amount"
+                  label="Detected amount"
                   amount={detectedAmount}
                   currencySymbol="₹"
                   placeholder="Waiting for invoice upload"
@@ -206,14 +198,14 @@ export default function Home() {
             </div>
 
             {/* ── Right Column: Conversion Phase ── */}
-            <div className="relative flex flex-col space-y-8">
+            <div className="relative flex flex-col space-y-8 lg:min-h-[400px]">
               {/* Desktop Divider line */}
-              <div className="absolute -left-8 top-0 bottom-0 hidden w-px bg-gray-100 lg:block" />
+              <div className="absolute -left-8 top-0 bottom-0 hidden w-px bg-[#E5E7EB] lg:block" />
 
               <motion.div variants={itemVariants}>
                 <div className="mb-4 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600">2</span>
-                  <h2 className="text-lg font-semibold text-gray-900">Convert Settings</h2>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4F46E5]/10 text-[12px] font-bold text-[#4F46E5]">2</span>
+                  <h2 className="text-[16px] font-semibold text-[#111827]">Convert settings</h2>
                 </div>
                 <CurrencySelector
                   value={selectedCurrency}
@@ -241,7 +233,7 @@ export default function Home() {
                     exit={{ opacity: 0, height: 0, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="rounded-xl bg-red-50 px-4 py-3.5 mt-2 text-sm font-medium text-red-600 ring-1 ring-red-500/10">
+                    <div className="rounded-[12px] bg-red-50 px-4 py-3 text-[14px] text-red-600 ring-1 ring-red-500/10">
                       {error}
                     </div>
                   </motion.div>
@@ -255,14 +247,14 @@ export default function Home() {
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                     className="flex flex-col flex-1"
                   >
-                    <hr className="mb-6 border-gray-100" />
-                    <div className="mb-6 flex-1 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/50 p-6 shadow-sm ring-1 ring-emerald-500/20">
-                      <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-100/80 px-3 py-1 text-xs font-bold tracking-wide text-emerald-800 backdrop-blur-sm ring-1 ring-emerald-500/20">
-                        <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
-                        Conversion Successful
+                    <hr className="mb-6 border-[#E5E7EB]" />
+                    <div className="mb-6 flex-1 rounded-[16px] bg-[#F8FAFC] p-6 ring-1 ring-[#E5E7EB]">
+                      <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-3 py-1 text-[12px] font-medium text-[#10B981]">
+                        <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+                        Conversion successful
                       </div>
                       <AmountDisplay
-                        label="Converted Amount"
+                        label="Converted amount"
                         amount={convertedAmount}
                         currencySymbol={convertedSymbol}
                         isResult
@@ -285,9 +277,9 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1 }}
-          className="mt-8 text-center text-xs font-medium text-gray-400"
+          className="mt-6 text-center text-[12px] text-[#6B7280]"
         >
-          © 2026 Invoice Currency Converter
+          © 2026 RupeeSwitch
         </motion.p>
       </div>
     </div>

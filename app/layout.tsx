@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: "--font-inter",
 });
 
 export const metadata: Metadata = {
-  title: "Invoice Currency Converter",
+  title: "RupeeSwitch | Invoice Converter",
   description:
-    "Upload an INR invoice PDF and convert amounts to USD, EUR, GBP, AED, SGD or AUD instantly.",
+    "Convert rupee invoices into global currencies instantly. Upload a PDF invoice, choose a currency, and download the converted version in seconds.",
 };
 
 export default function RootLayout({
@@ -26,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} font-sans antialiased text-[#111827] bg-[#F8FAFC]`}
       >
         {children}
       </body>
