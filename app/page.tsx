@@ -155,10 +155,12 @@ export default function Home() {
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
           className="mb-6 text-center"
         >
-          <h1 className="text-[36px] font-bold tracking-tight text-black leading-tight">
-            RupeeSwitch
-          </h1>
-          <p className="mt-1 text-[16px] font-medium text-gray-500">
+          <img
+            src="/logo.png"
+            alt="RupeeSwitch"
+            className="h-10 sm:h-12 w-auto mx-auto"
+          />
+          <p className="mt-2 text-[16px] font-medium text-gray-500">
             Instantly swap currency symbols on your invoices.
           </p>
         </motion.header>
