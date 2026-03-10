@@ -10,14 +10,14 @@ import CurrencySelector from "./components/CurrencySelector";
 import ConvertButton from "./components/ConvertButton";
 import DownloadButton from "./components/DownloadButton";
 
-// Demo exchange rates (INR → target)
-const exchangeRates: Record<string, { symbol: string; rate: number }> = {
-  USD: { symbol: "$", rate: 0.01207 },
-  EUR: { symbol: "€", rate: 0.01108 },
-  GBP: { symbol: "£", rate: 0.00953 },
-  AED: { symbol: "د.إ", rate: 0.04433 },
-  SGD: { symbol: "S$", rate: 0.01613 },
-  AUD: { symbol: "A$", rate: 0.01845 },
+// Supported currencies for symbol swapping
+const currencies: Record<string, { symbol: string }> = {
+  USD: { symbol: "$" },
+  EUR: { symbol: "€" },
+  GBP: { symbol: "£" },
+  AED: { symbol: "د.إ" },
+  SGD: { symbol: "S$" },
+  AUD: { symbol: "A$" },
 };
 
 const containerVariants = {
@@ -69,10 +69,7 @@ export default function Home() {
     setConvertedAmount(null);
     setError(null);
 
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 1500));
-
-    const meta = exchangeRates[selectedCurrency];
+    const meta = currencies[selectedCurrency];
     if (!meta) {
       setError("Unsupported currency selected.");
       setIsConverting(false);
@@ -80,21 +77,20 @@ export default function Home() {
     }
 
     setConvertedSymbol(meta.symbol);
-    setConvertedAmount(detectedAmount * meta.rate);
+    setConvertedAmount(detectedAmount);
     setIsConverting(false);
   }, [detectedAmount, selectedCurrency]);
 
   const handleDownload = useCallback(async () => {
     if (!convertedAmount || !selectedCurrency || !uploadedFile || !detectedAmount) return;
 
-    const meta = exchangeRates[selectedCurrency];
+    const meta = currencies[selectedCurrency];
     if (!meta) return;
 
     try {
       const formData = new FormData();
       formData.append("file", uploadedFile);
       formData.append("toCurrency", selectedCurrency);
-      formData.append("exchangeRate", String(meta.rate));
 
       const res = await fetch("/api/convert", {
         method: "POST",
@@ -111,23 +107,32 @@ export default function Home() {
       const blob = new Blob([data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
 
-      const fileName =
-        (uploadedFile.name?.replace(/\.pdf$/i, "") || "invoice") +
-        `-converted-${selectedCurrency}.pdf`;
+      let fileName = `${uploadedFile.name?.replace(/\.pdf$/i, "") || "invoice"}-updated-${selectedCurrency}.pdf`;
+      const disposition = res.headers.get("Content-Disposition");
+      if (disposition && disposition.includes("filename=")) {
+        const matches = /filename="?([^"]+)"?/.exec(disposition);
+        if (matches != null && matches[1]) {
+          fileName = matches[1];
+        }
+      }
+
+      if (!fileName.toLowerCase().endsWith('.pdf')) {
+        fileName += '.pdf';
+      }
 
       const a = document.createElement("a");
       a.style.display = "none";
       a.href = url;
-      a.download = fileName;
+      a.setAttribute("download", fileName);
       a.type = "application/pdf";
       document.body.appendChild(a);
       a.click();
 
-      // Delay cleanup so the browser has time to start the download
+      // Delay cleanup to ensure the browser successfully processes the download
       setTimeout(() => {
-        document.body.removeChild(a);
+        if (document.body.contains(a)) document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      }, 1000);
+      }, 5000);
     } catch {
       setError("Failed to download the converted invoice.");
     }
@@ -148,15 +153,15 @@ export default function Home() {
           {/* Logo */}
           <div className="mb-4 flex items-center justify-center gap-2">
             <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-[#E5E7EB]">
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute -ml-2 -mt-1"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute bottom-2 right-2 bg-white rounded-full"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute -ml-2 -mt-1"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute bottom-2 right-2 bg-white rounded-full"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
             </div>
           </div>
           <h1 className="text-[28px] sm:text-[36px] font-bold text-[#111827] leading-tight mb-3">
-            Convert rupee invoices into global currencies instantly.
+            Change currency symbols on your invoices instantly.
           </h1>
           <p className="text-[14px] sm:text-[16px] text-[#6B7280] max-w-lg mx-auto">
-            Upload a PDF invoice, choose a currency, and download the converted version in seconds.
+            Upload a PDF invoice, choose a new currency symbol, and download the updated version in seconds.
           </p>
         </motion.header>
 
@@ -168,7 +173,7 @@ export default function Home() {
           className="rounded-[16px] border border-[#E5E7EB] bg-[#FFFFFF] p-6 sm:p-8 lg:p-10 shadow-sm"
         >
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
-            
+
             {/* ── Left Column: Input Phase ── */}
             <div className="flex flex-col space-y-8">
               <motion.div variants={itemVariants}>
@@ -205,7 +210,7 @@ export default function Home() {
               <motion.div variants={itemVariants}>
                 <div className="mb-4 flex items-center gap-2">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4F46E5]/10 text-[12px] font-bold text-[#4F46E5]">2</span>
-                  <h2 className="text-[16px] font-semibold text-[#111827]">Convert settings</h2>
+                  <h2 className="text-[16px] font-semibold text-[#111827]">Symbol settings</h2>
                 </div>
                 <CurrencySelector
                   value={selectedCurrency}
@@ -251,10 +256,10 @@ export default function Home() {
                     <div className="mb-6 flex-1 rounded-[16px] bg-[#F8FAFC] p-6 ring-1 ring-[#E5E7EB]">
                       <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-3 py-1 text-[12px] font-medium text-[#10B981]">
                         <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
-                        Conversion successful
+                        Update successful
                       </div>
                       <AmountDisplay
-                        label="Converted amount"
+                        label="Updated amount"
                         amount={convertedAmount}
                         currencySymbol={convertedSymbol}
                         isResult

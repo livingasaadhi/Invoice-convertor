@@ -11,6 +11,17 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   AUD: "A$",
 }
 
+// Regex patterns for finding currency amounts
+const AMOUNT_PATTERNS = [
+  /[₹]\s?[\d,]+(?:\.\d{1,2})?/,
+  /INR\s?[\d,]+(?:\.\d{1,2})?/i,
+  /Rs\.?\s?[\d,]+(?:\.\d{1,2})?/i,
+  /Rupees\s?[\d,]+(?:\.\d{1,2})?/i,
+]
+
+// Plain numbers that look like currency (4+ digit numbers with commas)
+const PLAIN_NUMBER_PATTERN = /^[\d,]+\.\d{2}$/
+
 interface TextItem {
   str: string
   width: number
@@ -104,17 +115,7 @@ function mergeItemsIntoGroups(items: TextItem[]): MergedGroup[] {
 /**
  * Try multiple regex patterns to find INR amounts in merged text groups
  */
-function findAmountGroups(groups: MergedGroup[], exchangeRate: number, symbol: string) {
-  const patterns = [
-    /[₹]\s?[\d,]+(?:\.\d{1,2})?/,
-    /INR\s?[\d,]+(?:\.\d{1,2})?/i,
-    /Rs\.?\s?[\d,]+(?:\.\d{1,2})?/i,
-    /Rupees\s?[\d,]+(?:\.\d{1,2})?/i,
-  ]
-
-  // Also match plain numbers that look like currency (4+ digit numbers with commas)
-  const plainNumberPattern = /^[\d,]+\.\d{2}$/
-
+function findAmountGroups(groups: MergedGroup[], symbol: string) {
   const results: {
     group: MergedGroup
     convertedText: string
@@ -125,7 +126,7 @@ function findAmountGroups(groups: MergedGroup[], exchangeRate: number, symbol: s
     let matchedAmount: number | null = null
 
     // Try INR-specific patterns first
-    for (const pattern of patterns) {
+    for (const pattern of AMOUNT_PATTERNS) {
       const match = group.text.match(pattern)
       if (match) {
         const cleaned = match[0].replace(/[^\d.]/g, "")
@@ -139,7 +140,7 @@ function findAmountGroups(groups: MergedGroup[], exchangeRate: number, symbol: s
 
     // If no prefix match, try plain number pattern (for numbers ≥ 100)
     if (matchedAmount === null) {
-      const plainMatch = group.text.trim().match(plainNumberPattern)
+      const plainMatch = group.text.trim().match(PLAIN_NUMBER_PATTERN)
       if (plainMatch) {
         const num = parseFloat(plainMatch[0].replace(/,/g, ""))
         if (!isNaN(num) && num >= 100) {
@@ -149,8 +150,7 @@ function findAmountGroups(groups: MergedGroup[], exchangeRate: number, symbol: s
     }
 
     if (matchedAmount !== null) {
-      const converted = matchedAmount * exchangeRate
-      const formattedConverted = converted.toLocaleString("en-US", {
+      const formattedConverted = matchedAmount.toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })
@@ -171,11 +171,10 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const file = formData.get("file") as File
     const toCurrency = formData.get("toCurrency") as string
-    const exchangeRate = parseFloat(formData.get("exchangeRate") as string)
 
-    if (!file || !toCurrency || isNaN(exchangeRate)) {
+    if (!file || !toCurrency) {
       return NextResponse.json(
-        { error: "Missing file, currency, or exchange rate" },
+        { error: "Missing file or currency" },
         { status: 400 }
       )
     }
@@ -201,31 +200,11 @@ export async function POST(req: NextRequest) {
       if (pageData.pageIndex >= pages.length) continue
       const page = pages[pageData.pageIndex]
 
-      // Log all text items for debugging
-      console.log(`\n=== Page ${pageData.pageIndex + 1}: ${pageData.items.length} text items ===`)
-      for (const item of pageData.items) {
-        if (item.str.trim()) {
-          console.log(`  [${item.transform[4].toFixed(1)}, ${item.transform[5].toFixed(1)}] w=${item.width.toFixed(1)} "${item.str}"`)
-        }
-      }
-
       // Merge adjacent items into groups
       const groups = mergeItemsIntoGroups(pageData.items)
 
-      console.log(`\n=== Merged into ${groups.length} groups ===`)
-      for (const g of groups) {
-        if (g.text.trim()) {
-          console.log(`  [${g.x.toFixed(1)}, ${g.y.toFixed(1)}] w=${g.totalWidth.toFixed(1)} fs=${g.fontSize.toFixed(1)} "${g.text}"`)
-        }
-      }
-
       // Find amounts in merged groups
-      const amountGroups = findAmountGroups(groups, exchangeRate, symbol)
-
-      console.log(`\n=== Found ${amountGroups.length} amounts to replace ===`)
-      for (const ag of amountGroups) {
-        console.log(`  "${ag.group.text}" → "${ag.convertedText}" (₹${ag.originalAmount})`)
-      }
+      const amountGroups = findAmountGroups(groups, symbol)
 
       // Replace each amount
       for (const { group, convertedText } of amountGroups) {
@@ -252,8 +231,6 @@ export async function POST(req: NextRequest) {
         totalReplacements++
       }
     }
-
-    console.log(`\n>>> Total replacements: ${totalReplacements}`)
 
     // Step 4: Save and return modified PDF
     const pdfBytes = await pdfDoc.save()
