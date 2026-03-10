@@ -360,9 +360,9 @@ export async function POST(req: NextRequest) {
       for (const op of allOps) {
         page.drawRectangle({
           x: op.x - 1,
-          y: op.y - 2, // descender clearance
+          y: op.y - 1, // tighter descender margin
           width: op.w + 2,
-          height: op.h + 4,
+          height: op.h + 1, // tightly bound to exactly font height
           color: rgb(1, 1, 1),
         })
 
