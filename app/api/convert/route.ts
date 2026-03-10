@@ -15,6 +15,8 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 // Each entry is [searchRegex, replacementForEachCurrency]
 const CURRENCY_WORDS: Record<string, Record<string, string>> = {
   USD: {
+    "Indian Rupees": "Dollars", "Indian rupees": "Dollars", "indian rupees": "dollars", "INDIAN RUPEES": "DOLLARS",
+    "Indian Rupee": "Dollar", "Indian rupee": "Dollar", "indian rupee": "dollar", "INDIAN RUPEE": "DOLLAR",
     "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
     "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
@@ -22,6 +24,8 @@ const CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "INR": "USD",
   },
   EUR: {
+    "Indian Rupees": "Euros", "Indian rupees": "Euros", "indian rupees": "euros", "INDIAN RUPEES": "EUROS",
+    "Indian Rupee": "Euro", "Indian rupee": "Euro", "indian rupee": "euro", "INDIAN RUPEE": "EURO",
     "Rupees": "Euros", "rupees": "euros", "RUPEES": "EUROS",
     "Rupee": "Euro", "rupee": "euro", "RUPEE": "EURO",
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
@@ -29,6 +33,8 @@ const CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "INR": "EUR",
   },
   GBP: {
+    "Indian Rupees": "Pounds", "Indian rupees": "Pounds", "indian rupees": "pounds", "INDIAN RUPEES": "POUNDS",
+    "Indian Rupee": "Pound", "Indian rupee": "Pound", "indian rupee": "pound", "INDIAN RUPEE": "POUND",
     "Rupees": "Pounds", "rupees": "pounds", "RUPEES": "POUNDS",
     "Rupee": "Pound", "rupee": "pound", "RUPEE": "POUND",
     "Paise": "Pence", "paise": "pence", "PAISE": "PENCE",
@@ -36,6 +42,8 @@ const CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "INR": "GBP",
   },
   AED: {
+    "Indian Rupees": "Dirhams", "Indian rupees": "Dirhams", "indian rupees": "dirhams", "INDIAN RUPEES": "DIRHAMS",
+    "Indian Rupee": "Dirham", "Indian rupee": "Dirham", "indian rupee": "dirham", "INDIAN RUPEE": "DIRHAM",
     "Rupees": "Dirhams", "rupees": "dirhams", "RUPEES": "DIRHAMS",
     "Rupee": "Dirham", "rupee": "dirham", "RUPEE": "DIRHAM",
     "Paise": "Fils", "paise": "fils", "PAISE": "FILS",
@@ -43,6 +51,8 @@ const CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "INR": "AED",
   },
   SGD: {
+    "Indian Rupees": "Dollars", "Indian rupees": "Dollars", "indian rupees": "dollars", "INDIAN RUPEES": "DOLLARS",
+    "Indian Rupee": "Dollar", "Indian rupee": "Dollar", "indian rupee": "dollar", "INDIAN RUPEE": "DOLLAR",
     "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
     "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
@@ -50,6 +60,8 @@ const CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "INR": "SGD",
   },
   AUD: {
+    "Indian Rupees": "Dollars", "Indian rupees": "Dollars", "indian rupees": "dollars", "INDIAN RUPEES": "DOLLARS",
+    "Indian Rupee": "Dollar", "Indian rupee": "Dollar", "indian rupee": "dollar", "INDIAN RUPEE": "DOLLAR",
     "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
     "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
