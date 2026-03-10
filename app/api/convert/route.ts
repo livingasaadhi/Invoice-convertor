@@ -174,12 +174,49 @@ function mergeItemsIntoGroups(items: TextItem[]): MergedGroup[] {
 /**
  * Try multiple regex patterns to find INR amounts in merged text groups
  */
-function findAmountGroups(groups: MergedGroup[], symbol: string) {
-  const results: {
-    group: MergedGroup
-    convertedText: string
-    originalAmount: number
-  }[] = []
+interface ReplacementOp {
+  text: string
+  x: number
+  y: number
+  w: number
+  h: number
+  fontSize: number
+}
+
+function getMatchBounds(group: MergedGroup, matchIndex: number, matchLength: number) {
+  const charBounds: { x: number; w: number }[] = []
+
+  for (const item of group.items) {
+    const text = item.str
+    const itemX = item.transform[4]
+    const itemW = item.width
+    if (text.length === 0) continue
+
+    const charW = itemW / text.length
+    for (let i = 0; i < text.length; i++) {
+      charBounds.push({
+        x: itemX + i * charW,
+        w: charW
+      })
+    }
+  }
+
+  if (matchIndex < 0 || matchIndex >= charBounds.length) return null
+
+  const startChar = charBounds[matchIndex]
+  const endChar = charBounds[Math.min(matchIndex + matchLength - 1, charBounds.length - 1)]
+
+  return {
+    x: startChar.x,
+    w: (endChar.x + endChar.w) - startChar.x
+  }
+}
+
+/**
+ * Try multiple regex patterns to find INR amounts in merged text groups
+ */
+function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[] {
+  const ops: ReplacementOp[] = []
 
   for (const group of groups) {
     let matchedAmount: number | null = null
@@ -217,51 +254,64 @@ function findAmountGroups(groups: MergedGroup[], symbol: string) {
         maximumFractionDigits: 2,
       })
 
-      // Replace only the matched sub-string to preserve any surrounding text (e.g. "Tax: ")
-      const newText = group.text.replace(matchedString, `${symbol}${formattedConverted}`)
+      const convertedText = `${symbol}${formattedConverted}`
+      const startIndex = group.text.indexOf(matchedString)
+      const bounds = getMatchBounds(group, startIndex, matchedString.length)
 
-      results.push({
-        group,
-        convertedText: newText,
-        originalAmount: matchedAmount,
-      })
+      if (bounds) {
+        ops.push({
+          text: convertedText,
+          x: bounds.x,
+          y: group.y,
+          w: bounds.w,
+          h: group.fontSize,
+          fontSize: group.fontSize,
+        })
+      }
     }
   }
 
-  return results
+  return ops
 }
 
 /**
  * Find text groups containing INR-related words and replace them
  */
-function findWordGroups(groups: MergedGroup[], toCurrency: string) {
+function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementOp[] {
+  const ops: ReplacementOp[] = []
   const wordMap = CURRENCY_WORDS[toCurrency]
-  if (!wordMap) return []
-
-  const results: {
-    group: MergedGroup
-    convertedText: string
-  }[] = []
+  if (!wordMap) return ops
 
   for (const group of groups) {
-    let newText = group.text
-    let hasMatch = false
-
+    let currentText = group.text
     // Replace longer words first to avoid partial matches (e.g. "Rupees" before "Rupee")
     const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
-    for (const word of sortedWords) {
-      if (newText.includes(word)) {
-        newText = newText.split(word).join(wordMap[word])
-        hasMatch = true
-      }
-    }
 
-    if (hasMatch) {
-      results.push({ group, convertedText: newText })
+    for (const word of sortedWords) {
+      let startIndex = currentText.indexOf(word)
+      while (startIndex !== -1) {
+        const bounds = getMatchBounds(group, startIndex, word.length)
+        if (bounds) {
+          ops.push({
+            text: wordMap[word],
+            x: bounds.x,
+            y: group.y,
+            w: bounds.w,
+            h: group.fontSize,
+            fontSize: group.fontSize,
+          })
+        }
+
+        // Blank out the matched word with spaces so it's not matched again, 
+        // preserving the indices of the rest of the string
+        currentText = currentText.substring(0, startIndex) + " ".repeat(word.length) + currentText.substring(startIndex + word.length)
+
+        startIndex = currentText.indexOf(word, startIndex + word.length)
+      }
     }
   }
 
-  return results
+  return ops
 }
 
 export async function POST(req: NextRequest) {
@@ -301,50 +351,26 @@ export async function POST(req: NextRequest) {
       // Merge adjacent items into groups
       const groups = mergeItemsIntoGroups(pageData.items)
 
-      // Find amounts in merged groups
-      const amountGroups = findAmountGroups(groups, symbol)
+      // Find all replacements for this page
+      const amountOps = findAmountGroups(groups, symbol)
+      const wordOps = findWordGroups(groups, toCurrency)
+      const allOps = [...amountOps, ...wordOps]
 
-      // Replace each amount
-      for (const { group, convertedText } of amountGroups) {
-        // Draw tightly fitted white rectangle to cover the original text
-        // without overlapping neighbors (e.g. "Balance Due")
+      // Apply each replacement using its precise substring bounds
+      for (const op of allOps) {
         page.drawRectangle({
-          x: group.x - 1,
-          y: group.y - 1,
-          width: group.totalWidth + 2,
-          height: group.fontSize + 2,
+          x: op.x - 1,
+          y: op.y - 2, // descender clearance
+          width: op.w + 2,
+          height: op.h + 4,
           color: rgb(1, 1, 1),
         })
 
-        // Draw converted amount on top of the fresh white bg
-        const useFont = group.fontSize >= 14 ? fontBold : font
-        page.drawText(convertedText, {
-          x: group.x,
-          y: group.y,
-          size: group.fontSize,
-          font: useFont,
-          color: rgb(0, 0, 0),
-        })
-
-        totalReplacements++
-      }
-
-      // Second pass: Replace currency words (Rupees → Dollars, etc.)
-      const wordGroups = findWordGroups(groups, toCurrency)
-      for (const { group, convertedText } of wordGroups) {
-        page.drawRectangle({
-          x: group.x - 1,
-          y: group.y - 1,
-          width: group.totalWidth + 2,
-          height: group.fontSize + 2,
-          color: rgb(1, 1, 1),
-        })
-
-        const useFont = group.fontSize >= 14 ? fontBold : font
-        page.drawText(convertedText, {
-          x: group.x,
-          y: group.y,
-          size: group.fontSize,
+        const useFont = op.fontSize >= 14 ? fontBold : font
+        page.drawText(op.text, {
+          x: op.x,
+          y: op.y,
+          size: op.fontSize,
           font: useFont,
           color: rgb(0, 0, 0),
         })
