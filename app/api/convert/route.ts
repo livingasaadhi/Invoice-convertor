@@ -262,6 +262,8 @@ interface ReplacementOp {
   h: number
   fontSize: number
   fontName: string
+  fontColor?: number[]
+  isAmount: boolean
 }
 
 function getMatchBounds(group: MergedGroup, matchIndex: number, matchLength: number) {
@@ -332,12 +334,19 @@ function getEnhancedMatchBounds(group: MergedGroup, matchIndex: number, matchLen
   const startChar = charBounds[matchIndex]
   const endChar = charBounds[Math.min(matchIndex + matchLength - 1, charBounds.length - 1)]
 
+  // If match reaches end of the group, use the physical right boundary of the group
+  // because average char width underestimates wide characters like 0 at the end
+  let totalW = (endChar.x + endChar.w) - startChar.x;
+  if (matchIndex + matchLength >= charBounds.length) {
+    totalW = (group.x + group.totalWidth) - startChar.x;
+  }
+
   // Add small padding for better coverage
   const padding = 0.5
 
   return {
     x: startChar.x - padding,
-    w: (endChar.x + endChar.w) - startChar.x + (padding * 2),
+    w: totalW + (padding * 2),
     h: group.fontSize,
     baseline: group.y
   }
@@ -452,6 +461,8 @@ function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[
           h: bounds.h,
           fontSize: group.fontSize,
           fontName: group.fontName,
+          fontColor: group.items[0]?.fontColor,
+          isAmount: true,
         })
       }
     }
@@ -625,7 +636,9 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
         w: group.totalWidth, // Mask the entire original line
         h: group.fontSize,
         fontSize: group.fontSize,
-        fontName: group.fontName
+        fontName: group.fontName,
+        fontColor: group.items[0]?.fontColor,
+        isAmount: false,
       })
     }
   }
@@ -777,16 +790,6 @@ export async function POST(req: NextRequest) {
 
       // Apply each replacement using its precise substring bounds
       for (const op of allOps) {
-        // Enhanced overlay technique with improved masking
-        page.drawRectangle({
-          x: op.x - 0.8,
-          y: op.y - 0.8,
-          width: op.w + 1.6,
-          height: op.h + 1.6,
-          color: rgb(1, 1, 1),
-          opacity: 1.0,
-        })
-
         // Performance optimization: Use cached fonts
         const isBold = op.fontName.toLowerCase().includes('bold') || op.fontSize >= 14
         const isItalic = op.fontName.toLowerCase().includes('italic') || op.fontName.toLowerCase().includes('oblique')
@@ -798,13 +801,40 @@ export async function POST(req: NextRequest) {
 
         const useFont = await getCachedFont(pdfDoc, fontName)
 
+        // Calculate exact width of new text to allow right-alignment
+        const newTextWidth = useFont.widthOfTextAtSize(op.text, op.fontSize)
+
+        // Right-align amounts (as typical in tables), left-align words
+        const textX = op.isAmount ? (op.x + op.w) - newTextWidth : op.x
+
+        // Mask covers the union of ORIGINAL bounds and NEW bounds
+        const maskX = Math.min(op.x, textX) - 1
+        const maskW = Math.max(op.x + op.w, textX + newTextWidth) - maskX + 2
+
+        // Helvetica metrics for accurate Y bounding (descender & full height)
+        const descender = op.fontSize * 0.22
+        const maskY = op.y - descender - 0.5
+        const maskH = op.fontSize * 1.05 + 1.0
+
+        // Enhanced overlay technique with exact masking
+        page.drawRectangle({
+          x: maskX,
+          y: maskY,
+          width: maskW,
+          height: maskH,
+          color: rgb(1, 1, 1),
+          opacity: 1.0,
+        })
+
+        const fontCol = op.fontColor || [0, 0, 0]
+
         // Draw the text with enhanced positioning
         page.drawText(op.text, {
-          x: op.x,
+          x: textX,
           y: op.y,
           size: op.fontSize,
           font: useFont,
-          color: rgb(0, 0, 0),
+          color: rgb(fontCol[0], fontCol[1], fontCol[2]),
         })
 
         totalReplacements++
