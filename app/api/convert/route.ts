@@ -11,6 +11,53 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   AUD: "A$",
 }
 
+// Currency word replacements: INR word → target currency word
+// Each entry is [searchRegex, replacementForEachCurrency]
+const CURRENCY_WORDS: Record<string, Record<string, string>> = {
+  USD: {
+    "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
+    "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
+    "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
+    "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
+    "INR": "USD",
+  },
+  EUR: {
+    "Rupees": "Euros", "rupees": "euros", "RUPEES": "EUROS",
+    "Rupee": "Euro", "rupee": "euro", "RUPEE": "EURO",
+    "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
+    "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
+    "INR": "EUR",
+  },
+  GBP: {
+    "Rupees": "Pounds", "rupees": "pounds", "RUPEES": "POUNDS",
+    "Rupee": "Pound", "rupee": "pound", "RUPEE": "POUND",
+    "Paise": "Pence", "paise": "pence", "PAISE": "PENCE",
+    "Paisa": "Penny", "paisa": "penny", "PAISA": "PENNY",
+    "INR": "GBP",
+  },
+  AED: {
+    "Rupees": "Dirhams", "rupees": "dirhams", "RUPEES": "DIRHAMS",
+    "Rupee": "Dirham", "rupee": "dirham", "RUPEE": "DIRHAM",
+    "Paise": "Fils", "paise": "fils", "PAISE": "FILS",
+    "Paisa": "Fil", "paisa": "fil", "PAISA": "FIL",
+    "INR": "AED",
+  },
+  SGD: {
+    "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
+    "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
+    "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
+    "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
+    "INR": "SGD",
+  },
+  AUD: {
+    "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
+    "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
+    "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
+    "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
+    "INR": "AUD",
+  },
+}
+
 // Regex patterns for finding currency amounts
 const AMOUNT_PATTERNS = [
   /[₹]\s?[\d,]+(?:\.\d{1,2})?/,
@@ -172,6 +219,39 @@ function findAmountGroups(groups: MergedGroup[], symbol: string) {
   return results
 }
 
+/**
+ * Find text groups containing INR-related words and replace them
+ */
+function findWordGroups(groups: MergedGroup[], toCurrency: string) {
+  const wordMap = CURRENCY_WORDS[toCurrency]
+  if (!wordMap) return []
+
+  const results: {
+    group: MergedGroup
+    convertedText: string
+  }[] = []
+
+  for (const group of groups) {
+    let newText = group.text
+    let hasMatch = false
+
+    // Replace longer words first to avoid partial matches (e.g. "Rupees" before "Rupee")
+    const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
+    for (const word of sortedWords) {
+      if (newText.includes(word)) {
+        newText = newText.split(word).join(wordMap[word])
+        hasMatch = true
+      }
+    }
+
+    if (hasMatch) {
+      results.push({ group, convertedText: newText })
+    }
+  }
+
+  return results
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
@@ -225,6 +305,29 @@ export async function POST(req: NextRequest) {
         })
 
         // Draw converted amount on top of the fresh white bg
+        const useFont = group.fontSize >= 14 ? fontBold : font
+        page.drawText(convertedText, {
+          x: group.x,
+          y: group.y,
+          size: group.fontSize,
+          font: useFont,
+          color: rgb(0, 0, 0),
+        })
+
+        totalReplacements++
+      }
+
+      // Second pass: Replace currency words (Rupees → Dollars, etc.)
+      const wordGroups = findWordGroups(groups, toCurrency)
+      for (const { group, convertedText } of wordGroups) {
+        page.drawRectangle({
+          x: group.x - 1,
+          y: group.y - 1,
+          width: group.totalWidth + 2,
+          height: group.fontSize + 2,
+          color: rgb(1, 1, 1),
+        })
+
         const useFont = group.fontSize >= 14 ? fontBold : font
         page.drawText(convertedText, {
           x: group.x,
