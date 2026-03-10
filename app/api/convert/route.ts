@@ -86,6 +86,7 @@ interface TextItem {
   width: number
   height: number
   transform: number[] // [scaleX, skewY, skewX, scaleY, x, y]
+  fontName: string
 }
 
 interface MergedGroup {
@@ -95,6 +96,7 @@ interface MergedGroup {
   y: number
   totalWidth: number
   fontSize: number
+  fontName: string
 }
 
 /**
@@ -139,6 +141,7 @@ function mergeItemsIntoGroups(items: TextItem[]): MergedGroup[] {
     y: items[0].transform[5],
     totalWidth: items[0].width,
     fontSize: Math.abs(items[0].transform[0]) || 12,
+    fontName: items[0].fontName,
   }
 
   for (let i = 1; i < items.length; i++) {
@@ -164,6 +167,7 @@ function mergeItemsIntoGroups(items: TextItem[]): MergedGroup[] {
         y: item.transform[5],
         totalWidth: item.width,
         fontSize: Math.abs(item.transform[0]) || 12,
+        fontName: item.fontName,
       }
     }
   }
@@ -181,24 +185,26 @@ interface ReplacementOp {
   w: number
   h: number
   fontSize: number
+  fontName: string
 }
 
 function getMatchBounds(group: MergedGroup, matchIndex: number, matchLength: number) {
   const charBounds: { x: number; w: number }[] = []
 
+  let accumulatedX = group.x
   for (const item of group.items) {
     const text = item.str
-    const itemX = item.transform[4]
     const itemW = item.width
     if (text.length === 0) continue
 
     const charW = itemW / text.length
     for (let i = 0; i < text.length; i++) {
       charBounds.push({
-        x: itemX + i * charW,
+        x: accumulatedX + i * charW,
         w: charW
       })
     }
+    accumulatedX += itemW
   }
 
   if (matchIndex < 0 || matchIndex >= charBounds.length) return null
@@ -210,6 +216,12 @@ function getMatchBounds(group: MergedGroup, matchIndex: number, matchLength: num
     x: startChar.x,
     w: (endChar.x + endChar.w) - startChar.x
   }
+}
+
+// Calculate the rendered width of text in a specific font and size
+function estimateTextWidth(text: string, fontSize: number): number {
+  // Rough estimate for Helvetica: avg char width is ~0.5 * fontSize
+  return text.length * (fontSize * 0.5)
 }
 
 /**
@@ -266,6 +278,7 @@ function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[
           w: bounds.w,
           h: group.fontSize,
           fontSize: group.fontSize,
+          fontName: group.fontName,
         })
       }
     }
@@ -292,14 +305,38 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
       while (startIndex !== -1) {
         const bounds = getMatchBounds(group, startIndex, word.length)
         if (bounds) {
+          const replacementText = wordMap[word]
+          const estimatedNewWidth = estimateTextWidth(replacementText, group.fontSize)
+          // How much empty space is left after rendering the new shorter word
+          const widthDiff = bounds.w - estimatedNewWidth
+
           ops.push({
-            text: wordMap[word],
+            text: replacementText,
             x: bounds.x,
             y: group.y,
             w: bounds.w,
             h: group.fontSize,
             fontSize: group.fontSize,
+            fontName: group.fontName,
           })
+
+          // Shift trailing text leftwards by replacing the entire rest of the line, masking its old position
+          const trailingText = currentText.substring(startIndex + word.length).trim()
+          if (trailingText.length > 0 && widthDiff > 2) {
+            const tailStartIndex = currentText.indexOf(trailingText, startIndex + word.length)
+            const tailBounds = getMatchBounds(group, tailStartIndex, trailingText.length)
+            if (tailBounds) {
+              ops.push({
+                text: trailingText,
+                x: tailBounds.x - widthDiff + (group.fontSize * 0.25), // Shift left, add small space
+                y: group.y,
+                w: tailBounds.w + widthDiff, // Mask the original wide position
+                h: group.fontSize,
+                fontSize: group.fontSize,
+                fontName: group.fontName,
+              })
+            }
+          }
         }
 
         // Blank out the matched word with spaces so it's not matched again, 
@@ -339,6 +376,8 @@ export async function POST(req: NextRequest) {
     const pdfDoc = await PDFDocument.load(arrayBuffer)
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+    const fontOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique)
+    const fontBoldOblique = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique)
     const pages = pdfDoc.getPages()
 
     let totalReplacements = 0
@@ -366,7 +405,15 @@ export async function POST(req: NextRequest) {
           color: rgb(1, 1, 1),
         })
 
-        const useFont = op.fontSize >= 14 ? fontBold : font
+        const isBold = op.fontName.toLowerCase().includes('bold') || op.fontSize >= 14
+        const isItalic = op.fontName.toLowerCase().includes('italic') || op.fontName.toLowerCase().includes('oblique')
+
+        let useFont = font
+        if (isBold && isItalic) useFont = fontBoldOblique
+        else if (isBold) useFont = fontBold
+        else if (isItalic) useFont = fontOblique
+
+        // Draw the text
         page.drawText(op.text, {
           x: op.x,
           y: op.y,
