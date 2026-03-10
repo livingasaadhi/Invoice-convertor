@@ -288,7 +288,8 @@ function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[
 }
 
 /**
- * Find text groups containing INR-related words and replace them
+ * Find text groups containing INR-related words, replace the words within the whole string,
+ * and redraw the entire string to avoid shifting/spacing artifacts
  */
 function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementOp[] {
   const ops: ReplacementOp[] = []
@@ -296,55 +297,30 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
   if (!wordMap) return ops
 
   for (const group of groups) {
-    let currentText = group.text
+    let newText = group.text
+    let hasMatch = false
+
     // Replace longer words first to avoid partial matches (e.g. "Rupees" before "Rupee")
     const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
 
     for (const word of sortedWords) {
-      let startIndex = currentText.indexOf(word)
-      while (startIndex !== -1) {
-        const bounds = getMatchBounds(group, startIndex, word.length)
-        if (bounds) {
-          const replacementText = wordMap[word]
-          const estimatedNewWidth = estimateTextWidth(replacementText, group.fontSize)
-          // How much empty space is left after rendering the new shorter word
-          const widthDiff = bounds.w - estimatedNewWidth
-
-          ops.push({
-            text: replacementText,
-            x: bounds.x,
-            y: group.y,
-            w: bounds.w,
-            h: group.fontSize,
-            fontSize: group.fontSize,
-            fontName: group.fontName,
-          })
-
-          // Shift trailing text leftwards by replacing the entire rest of the line, masking its old position
-          const trailingText = currentText.substring(startIndex + word.length).trim()
-          if (trailingText.length > 0 && widthDiff > 2) {
-            const tailStartIndex = currentText.indexOf(trailingText, startIndex + word.length)
-            const tailBounds = getMatchBounds(group, tailStartIndex, trailingText.length)
-            if (tailBounds) {
-              ops.push({
-                text: trailingText,
-                x: tailBounds.x - widthDiff + (group.fontSize * 0.25), // Shift left, add small space
-                y: group.y,
-                w: tailBounds.w + widthDiff, // Mask the original wide position
-                h: group.fontSize,
-                fontSize: group.fontSize,
-                fontName: group.fontName,
-              })
-            }
-          }
-        }
-
-        // Blank out the matched word with spaces so it's not matched again, 
-        // preserving the indices of the rest of the string
-        currentText = currentText.substring(0, startIndex) + " ".repeat(word.length) + currentText.substring(startIndex + word.length)
-
-        startIndex = currentText.indexOf(word, startIndex + word.length)
+      if (newText.includes(word)) {
+        newText = newText.split(word).join(wordMap[word])
+        hasMatch = true
       }
+    }
+
+    if (hasMatch) {
+      // Issue a single replacement op for the entire line to guarantee seamless spacing
+      ops.push({
+        text: newText,
+        x: group.x,
+        y: group.y,
+        w: group.totalWidth, // Mask the entire original line
+        h: group.fontSize,
+        fontSize: group.fontSize,
+        fontName: group.fontName
+      })
     }
   }
 
