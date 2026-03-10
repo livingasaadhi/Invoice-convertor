@@ -29,7 +29,7 @@ export default function UploadDropzone({
   const [isUploading, setIsUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function handleUpload(file: File) {
+  const handleUpload = useCallback(async (file: File) => {
     setIsUploading(true);
     try {
       const formData = new FormData();
@@ -52,7 +52,7 @@ export default function UploadDropzone({
     } finally {
       setIsUploading(false);
     }
-  }
+  }, [onAmountDetected, onError]);
 
   const handleFile = useCallback(
     (file: File) => {
@@ -63,7 +63,7 @@ export default function UploadDropzone({
       onFileUpload(file);
       handleUpload(file);
     },
-    [onFileUpload, onError]
+    [onFileUpload, onError, handleUpload]
   );
 
   const handleDrop = useCallback(
@@ -94,83 +94,83 @@ export default function UploadDropzone({
   );
 
   return (
-    <div className="space-y-4">
-      {/* Drop area */}
-      <motion.div
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => inputRef.current?.click()}
-        className={`
-          relative cursor-pointer rounded-[16px] border border-dashed p-10 text-center
-          transition-colors duration-300 ease-out flex flex-col items-center justify-center min-h-[200px]
-          ${
-            isDragging
-              ? "border-[#4F46E5] bg-[#F8FAFC]"
-              : "border-[#E5E7EB] bg-[#F8FAFC] hover:border-[#D1D5DB]"
-          }
-        `}
-      >
-        <div className="mb-4 text-[#6B7280]">
-          {isUploading ? (
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-            >
-              <Loader2 className="h-8 w-8 text-[#4F46E5]" strokeWidth={1.5} />
-            </motion.div>
-          ) : (
-            <UploadCloud className="h-8 w-8 transition-colors" strokeWidth={1.5} />
-          )}
-        </div>
-        <p className="text-[16px] font-medium text-[#111827]">
-          {isUploading ? "Reading invoice data…" : "Upload your invoice"}
-        </p>
-        <p className="mt-1 text-[14px] text-[#6B7280]">
-          {isUploading ? "Please wait a moment" : "Click to browse or drag and drop your PDF here"}
-        </p>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf"
-          onChange={handleChange}
-          className="hidden"
-        />
-      </motion.div>
-
-      {/* Uploaded file chip */}
-      <AnimatePresence>
-        {uploadedFile && (
+    <div>
+      <AnimatePresence mode="popLayout">
+        {!uploadedFile ? (
           <motion.div
+            key="dropzone"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.99 }}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => inputRef.current?.click()}
+            className={`
+              relative cursor-pointer rounded-[14px] border-2 border-black p-6 text-center
+              transition-all duration-200 ease-out flex flex-col items-center justify-center min-h-[160px]
+              shadow-[4px_4px_0px_#000]
+              ${isDragging ? "bg-[#B9A8D8]" : "bg-[#C7B8EA] hover:bg-[#B9A8D8]"}
+            `}
+          >
+            <div className="mb-3">
+              {isUploading ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                >
+                  <Loader2 className="h-10 w-10 text-black" strokeWidth={2} />
+                </motion.div>
+              ) : (
+                <UploadCloud className="h-10 w-10 text-black" strokeWidth={2} />
+              )}
+            </div>
+            <p className="text-[16px] font-bold text-black">
+              {isUploading ? "Reading invoice data…" : "Drag and drop your invoice PDF"}
+            </p>
+            <p className="mt-1 text-[14px] font-medium text-black/60">
+              {isUploading ? "Please wait a moment" : "or click to upload"}
+            </p>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleChange}
+              className="hidden"
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="uploaded"
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
-            className="group flex items-center gap-3 rounded-[12px] bg-[#F8FAFC] px-4 py-3 border border-[#E5E7EB]"
+            className="flex items-center gap-3 rounded-[14px] bg-white px-4 py-4 border-2 border-black shadow-[4px_4px_0px_#000]"
           >
-            <div className="flex bg-[#FFFFFF] p-2 rounded-[8px] border border-[#E5E7EB]">
-              <FileText className="h-5 w-5 shrink-0 text-[#6B7280]" strokeWidth={1.5} />
+            <div className="flex bg-[#C7B8EA] p-2.5 rounded-[10px] border-2 border-black">
+              <FileText className="h-6 w-6 shrink-0 text-black" strokeWidth={2} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-medium text-[#111827]">
+              <p className="truncate text-[16px] font-bold text-black">
                 {uploadedFile.name}
               </p>
-              <p className="text-[12px] text-[#6B7280]">
+              <p className="text-[13px] font-medium text-gray-500">
                 {formatFileSize(uploadedFile.size)}
               </p>
             </div>
             <motion.button
-              whileHover={{ scale: 1.1, backgroundColor: "#FEE2E2" }}
+              whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={(e) => {
                 e.stopPropagation();
                 onRemoveFile();
               }}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9CA3AF] transition-colors hover:text-red-500"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border-2 border-black bg-white text-black transition-colors hover:bg-red-100 hover:text-red-600"
               title="Remove file"
             >
-              <X className="h-4 w-4" strokeWidth={2} />
+              <X className="h-4 w-4" strokeWidth={2.5} />
             </motion.button>
           </motion.div>
         )}

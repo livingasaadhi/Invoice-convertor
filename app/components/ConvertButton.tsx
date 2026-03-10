@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Loader2, ArrowRightLeft } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 interface ConvertButtonProps {
   disabled: boolean;
@@ -14,20 +14,20 @@ export default function ConvertButton({
 }: ConvertButtonProps) {
   return (
     <motion.button
-      whileHover={disabled || isLoading ? {} : { scale: 1.01 }}
-      whileTap={disabled || isLoading ? {} : { scale: 0.98 }}
+      whileHover={disabled || isLoading ? {} : { y: 2, boxShadow: "4px 4px 0px #000" }}
+      whileTap={disabled || isLoading ? {} : { y: 4, boxShadow: "2px 2px 0px #000" }}
       type="button"
       disabled={disabled || isLoading}
       onClick={onClick}
       className={`
-        w-full rounded-[12px] px-6 py-4 text-[16px] font-medium text-white
-        transition-colors duration-200 ease-in-out
-        ${
-          disabled || isLoading
-            ? "cursor-not-allowed bg-indigo-300"
-            : "bg-[#4F46E5] hover:bg-[#4338CA]"
+        w-full rounded-[12px] px-6 py-4 text-[16px] font-bold
+        transition-all duration-100 ease-out border-2 border-black
+        ${disabled || isLoading
+          ? "cursor-not-allowed bg-gray-200 text-gray-400 border-gray-300 shadow-none"
+          : "bg-black text-white shadow-[6px_6px_0px_#000]"
         }
       `}
+      style={{ minHeight: 50 }}
     >
       <span className="flex items-center justify-center gap-2">
         {isLoading ? (
@@ -41,9 +41,7 @@ export default function ConvertButton({
             Converting…
           </>
         ) : (
-          <>
-            Convert invoice
-          </>
+          <>Convert invoice</>
         )}
       </span>
     </motion.button>

@@ -24,7 +24,7 @@ export default function AmountDisplay({
 }: AmountDisplayProps) {
   return (
     <div>
-      <h2 className="mb-2 text-[14px] font-medium text-[#6B7280]">
+      <h2 className="mb-2 text-[14px] font-bold uppercase tracking-wider text-gray-500">
         {label}
       </h2>
       <AnimatePresence mode="popLayout">
@@ -35,19 +35,17 @@ export default function AmountDisplay({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            className="flex items-baseline gap-1.5 pt-1"
+            className="flex items-baseline gap-2 pt-1"
           >
             <span
-              className={`text-[24px] font-bold ${
-                isResult ? "text-[#10B981]" : "text-[#111827]"
-              }`}
+              className={`text-[28px] font-bold ${isResult ? "text-[#22C55E]" : "text-black"
+                }`}
             >
               {currencySymbol}
             </span>
             <span
-              className={`text-[32px] sm:text-[40px] font-bold tracking-tight tabular-nums ${
-                isResult ? "text-[#10B981]" : "text-[#111827]"
-              }`}
+              className={`text-[40px] font-bold tracking-tight tabular-nums ${isResult ? "text-[#22C55E]" : "text-black"
+                }`}
             >
               {formatAmount(amount, isResult ? 2 : 0)}
             </span>
@@ -58,7 +56,7 @@ export default function AmountDisplay({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="pt-2 text-[16px] text-[#9CA3AF]"
+            className="pt-2 text-[16px] text-gray-400"
           >
             {placeholder}
           </motion.p>

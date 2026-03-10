@@ -24,7 +24,7 @@ const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.1 },
+    transition: { staggerChildren: 0.08, delayChildren: 0.05 },
   },
 };
 
@@ -102,85 +102,82 @@ export default function Home() {
         return;
       }
 
-      // Trigger browser download as PDF
-      const data = await res.arrayBuffer();
-      const blob = new Blob([data], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
+      const blob = await res.blob();
+      const fileName = `${uploadedFile.name?.replace(/\.pdf$/i, "") || "invoice"}-converted-${selectedCurrency}.pdf`;
 
-      let fileName = `${uploadedFile.name?.replace(/\.pdf$/i, "") || "invoice"}-updated-${selectedCurrency}.pdf`;
-      const disposition = res.headers.get("Content-Disposition");
-      if (disposition && disposition.includes("filename=")) {
-        const matches = /filename="?([^"]+)"?/.exec(disposition);
-        if (matches != null && matches[1]) {
-          fileName = matches[1];
+      // Use the native File System Access API for a real "Save As" dialog
+      if (typeof window !== "undefined" && "showSaveFilePicker" in window) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{
+              description: "PDF Document",
+              accept: { "application/pdf": [".pdf"] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        } catch (pickerError: unknown) {
+          if (pickerError instanceof DOMException && pickerError.name === "AbortError") return;
         }
       }
 
-      if (!fileName.toLowerCase().endsWith('.pdf')) {
-        fileName += '.pdf';
-      }
-
+      // Legacy fallback
+      const pdfBlob = new Blob([await blob.arrayBuffer()], { type: "application/pdf" });
+      const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
-      a.style.display = "none";
       a.href = url;
-      a.setAttribute("download", fileName);
-      a.type = "application/pdf";
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
-
-      // Delay cleanup to ensure the browser successfully processes the download
       setTimeout(() => {
         if (document.body.contains(a)) document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      }, 5000);
+      }, 10000);
     } catch {
       setError("Failed to download the converted invoice.");
     }
   }, [convertedAmount, selectedCurrency, uploadedFile, detectedAmount]);
 
-  const canConvert = !!uploadedFile && !!selectedCurrency;
+  const canConvert = !!uploadedFile && !!selectedCurrency && convertedAmount === null;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center overflow-x-hidden bg-[#F8FAFC] px-4 py-8">
-      <div className="w-full max-w-5xl">
-        {/* ── Header / Logo ── */}
+    <div className="flex flex-col items-center justify-center bg-[#F8FAFC] px-4 py-6 lg:py-0 lg:h-screen text-black">
+      <div className="w-full max-w-5xl lg:flex lg:flex-col lg:justify-center">
+
+        {/* ── Header ── */}
         <motion.header
-          initial={{ opacity: 0, scale: 0.95, y: -20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
-          className="mb-8 text-center flex flex-col items-center"
+          className="mb-6 text-center"
         >
-          {/* Logo */}
-          <div className="mb-4 flex items-center justify-center gap-2">
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-[#E5E7EB]">
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute -ml-2 -mt-1"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></svg>
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute bottom-2 right-2 bg-white rounded-full"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
-            </div>
-          </div>
-          <h1 className="text-[28px] sm:text-[36px] font-bold text-[#111827] leading-tight mb-3">
-            Change currency symbols on your invoices instantly.
+          <h1 className="text-[36px] font-bold tracking-tight text-black leading-tight">
+            RupeeSwitch
           </h1>
-          <p className="text-[14px] sm:text-[16px] text-[#6B7280] max-w-lg mx-auto">
-            Upload a PDF invoice, choose a new currency symbol, and download the updated version in seconds.
+          <p className="mt-1 text-[16px] font-medium text-gray-500">
+            Instantly swap currency symbols on your invoices.
           </p>
         </motion.header>
 
-        {/* ── Main Layout (Two Column) ── */}
+        {/* ── Main Card ── */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="show"
-          className="rounded-[16px] border border-[#E5E7EB] bg-[#FFFFFF] p-6 sm:p-8 lg:p-10 shadow-sm"
+          className="rounded-[14px] border-2 border-black bg-white p-6 lg:p-8 shadow-[6px_6px_0px_#000]"
         >
-          <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10">
 
-            {/* ── Left Column: Input Phase ── */}
-            <div className="flex flex-col space-y-8">
+            {/* ── Left Column: Upload & Detection ── */}
+            <div className="flex flex-col gap-6">
               <motion.div variants={itemVariants}>
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4F46E5]/10 text-[12px] font-bold text-[#4F46E5]">1</span>
-                  <h2 className="text-[16px] font-semibold text-[#111827]">Upload invoice</h2>
-                </div>
+                <h2 className="mb-3 text-[18px] font-bold text-black">
+                  Upload invoice
+                </h2>
                 <UploadDropzone
                   onFileUpload={handleFileUpload}
                   onAmountDetected={(amount) => setDetectedAmount(amount)}
@@ -190,28 +187,27 @@ export default function Home() {
                 />
               </motion.div>
 
-              <motion.hr variants={itemVariants} className="border-[#E5E7EB]" />
-
               <motion.div variants={itemVariants}>
-                <AmountDisplay
-                  label="Detected amount"
-                  amount={detectedAmount}
-                  currencySymbol="₹"
-                  placeholder="Waiting for invoice upload"
-                />
+                <div className="rounded-[14px] border-2 border-black bg-white p-5 shadow-[4px_4px_0px_#000]">
+                  <AmountDisplay
+                    label="Detected amount"
+                    amount={detectedAmount}
+                    currencySymbol="₹"
+                    placeholder="Waiting for invoice upload"
+                  />
+                </div>
               </motion.div>
             </div>
 
-            {/* ── Right Column: Conversion Phase ── */}
-            <div className="relative flex flex-col space-y-8 lg:min-h-[400px]">
-              {/* Desktop Divider line */}
-              <div className="absolute -left-8 top-0 bottom-0 hidden w-px bg-[#E5E7EB] lg:block" />
+            {/* ── Right Column: Conversion ── */}
+            <div className="relative flex flex-col gap-6">
+              {/* Desktop Divider */}
+              <div className="absolute -left-5 top-0 bottom-0 hidden w-[2px] bg-black lg:block" />
 
               <motion.div variants={itemVariants}>
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4F46E5]/10 text-[12px] font-bold text-[#4F46E5]">2</span>
-                  <h2 className="text-[16px] font-semibold text-[#111827]">Symbol settings</h2>
-                </div>
+                <h2 className="mb-3 text-[18px] font-bold text-black">
+                  Symbol settings
+                </h2>
                 <CurrencySelector
                   value={selectedCurrency}
                   onChange={(v) => {
@@ -238,7 +234,7 @@ export default function Home() {
                     exit={{ opacity: 0, height: 0, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="rounded-[12px] bg-red-50 px-4 py-3 text-[14px] text-red-600 ring-1 ring-red-500/10">
+                    <div className="rounded-[12px] bg-red-100 px-4 py-3 text-[14px] font-bold text-red-700 border-2 border-black shadow-[3px_3px_0px_#000]">
                       {error}
                     </div>
                   </motion.div>
@@ -250,12 +246,12 @@ export default function Home() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                    className="flex flex-col flex-1"
+                    className="flex flex-col gap-4"
                   >
-                    <hr className="mb-6 border-[#E5E7EB]" />
-                    <div className="mb-6 flex-1 rounded-[16px] bg-[#F8FAFC] p-6 ring-1 ring-[#E5E7EB]">
-                      <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-3 py-1 text-[12px] font-medium text-[#10B981]">
-                        <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+                    {/* Success Result Card */}
+                    <div className="rounded-[14px] border-2 border-black bg-white p-5 shadow-[4px_4px_0px_#000]">
+                      <div className="mb-3 inline-flex items-center gap-1.5 rounded-[8px] bg-green-100 border-2 border-black px-3 py-1 text-[12px] font-bold text-green-700">
+                        <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
                         Update successful
                       </div>
                       <AmountDisplay
@@ -266,8 +262,15 @@ export default function Home() {
                       />
                     </div>
 
-                    <div className="mt-auto">
+                    {/* Action Buttons */}
+                    <div className="flex flex-col gap-3">
                       <DownloadButton onClick={handleDownload} />
+                      <button
+                        onClick={handleRemoveFile}
+                        className="w-full rounded-[12px] border-2 border-black bg-white px-6 py-3 text-[16px] font-bold text-black shadow-[4px_4px_0px_#000] transition-all duration-100 hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#000]"
+                      >
+                        Start over
+                      </button>
                     </div>
                   </motion.div>
                 )}
@@ -282,7 +285,7 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1 }}
-          className="mt-6 text-center text-[12px] text-[#6B7280]"
+          className="mt-4 text-center text-[12px] font-medium text-gray-400"
         >
           © 2026 RupeeSwitch
         </motion.p>

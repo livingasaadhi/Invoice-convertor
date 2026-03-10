@@ -124,6 +124,7 @@ function findAmountGroups(groups: MergedGroup[], symbol: string) {
 
   for (const group of groups) {
     let matchedAmount: number | null = null
+    let matchedString = ""
 
     // Try INR-specific patterns first
     for (const pattern of AMOUNT_PATTERNS) {
@@ -131,8 +132,9 @@ function findAmountGroups(groups: MergedGroup[], symbol: string) {
       if (match) {
         const cleaned = match[0].replace(/[^\d.]/g, "")
         const num = parseFloat(cleaned)
-        if (!isNaN(num) && num > 0) {
+        if (!isNaN(num) && num >= 0) {
           matchedAmount = num
+          matchedString = match[0]
           break
         }
       }
@@ -145,6 +147,7 @@ function findAmountGroups(groups: MergedGroup[], symbol: string) {
         const num = parseFloat(plainMatch[0].replace(/,/g, ""))
         if (!isNaN(num) && num >= 100) {
           matchedAmount = num
+          matchedString = plainMatch[0]
         }
       }
     }
@@ -155,9 +158,12 @@ function findAmountGroups(groups: MergedGroup[], symbol: string) {
         maximumFractionDigits: 2,
       })
 
+      // Replace only the matched sub-string to preserve any surrounding text (e.g. "Tax: ")
+      const newText = group.text.replace(matchedString, `${symbol}${formattedConverted}`)
+
       results.push({
         group,
-        convertedText: `${symbol}${formattedConverted}`,
+        convertedText: newText,
         originalAmount: matchedAmount,
       })
     }
