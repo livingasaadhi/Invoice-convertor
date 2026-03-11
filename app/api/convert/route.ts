@@ -515,6 +515,13 @@ function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[
       const bounds = getEnhancedMatchBounds(group, startIndex, matchedString.length)
 
       if (bounds) {
+        // Specifically force the #F5F5F5 background for the "Balance Due" line if it appears nearby
+        const isBalanceDueLine = groups.some(g => Math.abs(g.y - group.y) < 5 && g.text.toLowerCase().includes("balance due"));
+        let targetBgColor = group.bgColor ?? undefined;
+        if (isBalanceDueLine) {
+          targetBgColor = [245 / 255, 245 / 255, 245 / 255]; // #F5F5F5
+        }
+
         ops.push({
           text: convertedText,
           x: bounds.x,
@@ -524,6 +531,7 @@ function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[
           fontSize: group.fontSize,
           fontName: group.fontName,
           fontColor: group.items[0]?.fontColor,
+          bgColor: targetBgColor,
           isAmount: true,
         })
       }
