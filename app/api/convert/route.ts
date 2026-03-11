@@ -629,9 +629,35 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
     }
 
     if (hasMatch) {
+      // Look ahead for "Only" on the immediate next line(s) to pull it inline
+      let appendOnly = false;
+      if (i + 1 < groups.length) {
+        const nextGroup = groups[i + 1]
+        const nextTarget = nextGroup.text.trim().toLowerCase()
+        if (nextTarget === "only" || nextTarget === "only." || nextTarget === "only/-") {
+          appendOnly = true;
+          // Erase the old orphaned "Only" by drawing a blank space over its bounding box
+          ops.push({
+            text: "",
+            x: nextGroup.x,
+            y: nextGroup.y,
+            w: nextGroup.totalWidth,
+            h: nextGroup.fontSize,
+            fontSize: nextGroup.fontSize,
+            fontName: group.fontName,
+            fontColor: group.items[0]?.fontColor,
+            isAmount: false,
+          })
+          i++ // skip the "Only" group so we don't process it twice
+        }
+      }
+
+      // Combine the modified main phrase with the "Only" inline
+      const finalCombinedText = appendOnly ? `${newText} Only` : newText;
+
       // Issue a single replacement op for the entire line to guarantee seamless spacing
       ops.push({
-        text: newText,
+        text: finalCombinedText,
         x: group.x,
         y: group.y,
         w: group.totalWidth, // Mask the entire original line
@@ -641,27 +667,6 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
         fontColor: group.items[0]?.fontColor,
         isAmount: false,
       })
-
-      // Look ahead for "Only" on the immediate next line(s) to apply matching fonts
-      // Sometimes "Only" or "Only." is pushed to a new line and left orphaned in the old font
-      if (i + 1 < groups.length) {
-        const nextGroup = groups[i + 1]
-        const nextTarget = nextGroup.text.trim().toLowerCase()
-        if (nextTarget === "only" || nextTarget === "only." || nextTarget === "only/-") {
-          ops.push({
-            text: nextGroup.text, // redraw the exact same text, but in the matching font
-            x: nextGroup.x,
-            y: nextGroup.y,
-            w: nextGroup.totalWidth,
-            h: nextGroup.fontSize,
-            fontSize: nextGroup.fontSize,
-            fontName: group.fontName, // Inherit the fontName from the parent "Rupees" line for uniformity
-            fontColor: group.items[0]?.fontColor,
-            isAmount: false,
-          })
-          i++ // skip the "Only" group so we don't process it twice
-        }
-      }
     }
   }
 
