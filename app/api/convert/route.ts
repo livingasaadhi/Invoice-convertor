@@ -613,7 +613,8 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
   const wordMap = ENHANCED_CURRENCY_WORDS[toCurrency] || CURRENCY_WORDS[toCurrency]
   if (!wordMap) return ops
 
-  for (const group of groups) {
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i]
     let newText = group.text
     let hasMatch = false
 
@@ -640,6 +641,27 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
         fontColor: group.items[0]?.fontColor,
         isAmount: false,
       })
+
+      // Look ahead for "Only" on the immediate next line(s) to apply matching fonts
+      // Sometimes "Only" or "Only." is pushed to a new line and left orphaned in the old font
+      if (i + 1 < groups.length) {
+        const nextGroup = groups[i + 1]
+        const nextTarget = nextGroup.text.trim().toLowerCase()
+        if (nextTarget === "only" || nextTarget === "only." || nextTarget === "only/-") {
+          ops.push({
+            text: nextGroup.text, // redraw the exact same text, but in the matching font
+            x: nextGroup.x,
+            y: nextGroup.y,
+            w: nextGroup.totalWidth,
+            h: nextGroup.fontSize,
+            fontSize: nextGroup.fontSize,
+            fontName: group.fontName, // Inherit the fontName from the parent "Rupees" line for uniformity
+            fontColor: group.items[0]?.fontColor,
+            isAmount: false,
+          })
+          i++ // skip the "Only" group so we don't process it twice
+        }
+      }
     }
   }
 
