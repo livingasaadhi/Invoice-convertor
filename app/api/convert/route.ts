@@ -516,7 +516,11 @@ function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[
 
       if (bounds) {
         // Specifically force the #F5F5F5 background for the "Balance Due" line if it appears nearby
-        const isBalanceDueLine = groups.some(g => Math.abs(g.y - group.y) < 5 && g.text.toLowerCase().includes("balance due"));
+        // We look across all groups on the same line to see if both "balance" and "due" are present
+        const sameLineGroups = groups.filter(g => Math.abs(g.y - group.y) < 5);
+        const lineText = sameLineGroups.map(g => g.text.toLowerCase()).join(" ");
+        const isBalanceDueLine = lineText.includes("balance") && lineText.includes("due");
+
         let targetBgColor = group.bgColor ?? undefined;
         if (isBalanceDueLine) {
           targetBgColor = [245 / 255, 245 / 255, 245 / 255]; // #F5F5F5
