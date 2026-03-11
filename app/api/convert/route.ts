@@ -447,106 +447,6 @@ const ENHANCED_AMOUNT_PATTERNS = [
 /**
  * Try multiple regex patterns to find INR amounts in merged text groups with enhanced detection
  */
-function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[] {
-  const ops: ReplacementOp[] = []
-
-  for (const group of groups) {
-    let matchedAmount: number | null = null
-    let matchedString = ""
-    let contextMatch = false
-
-    // Try enhanced patterns first (context-aware)
-    for (const pattern of ENHANCED_AMOUNT_PATTERNS) {
-      const match = group.text.match(pattern)
-      if (match) {
-        // Extract the actual amount from the match
-        const fullMatch = match[0]
-        const amountMatch = fullMatch.match(/[\d,]+(?:\.\d{1,2})?/)
-
-        if (amountMatch) {
-          const cleaned = amountMatch[0].replace(/[^\d.]/g, "")
-          const num = parseFloat(cleaned)
-          if (!isNaN(num) && num >= 0) {
-            matchedAmount = num
-            matchedString = amountMatch[0]
-            contextMatch = true
-            break
-          }
-        }
-      }
-    }
-
-    // If no context match, try basic patterns
-    if (matchedAmount === null) {
-      for (const pattern of AMOUNT_PATTERNS) {
-        const match = group.text.match(pattern)
-        if (match) {
-          const cleaned = match[0].replace(/[^\d.]/g, "")
-          const num = parseFloat(cleaned)
-          if (!isNaN(num) && num >= 0) {
-            matchedAmount = num
-            matchedString = match[0]
-            break
-          }
-        }
-      }
-    }
-
-    // If still no match, try plain number pattern (for numbers ≥ 100)
-    if (matchedAmount === null) {
-      const plainMatch = group.text.trim().match(PLAIN_NUMBER_PATTERN)
-      if (plainMatch) {
-        const num = parseFloat(plainMatch[0].replace(/,/g, ""))
-        if (!isNaN(num) && num >= 100) {
-          matchedAmount = num
-          matchedString = plainMatch[0]
-        }
-      }
-    }
-
-    if (matchedAmount !== null) {
-      const formattedConverted = matchedAmount.toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-
-      const convertedText = `${symbol}${formattedConverted}`
-      const startIndex = group.text.indexOf(matchedString)
-
-      // Use enhanced positioning for better accuracy
-      const bounds = getEnhancedMatchBounds(group, startIndex, matchedString.length)
-
-      if (bounds) {
-        // Specifically force the #F5F5F5 background for the "Balance Due" line if it appears nearby
-        // We look across all groups on the same line to see if both "balance" and "due" are present
-        const sameLineGroups = groups.filter(g => Math.abs(g.y - group.y) < 5);
-        const lineText = sameLineGroups.map(g => g.text.toLowerCase()).join(" ");
-        const isBalanceDueLine = lineText.includes("balance") && lineText.includes("due");
-
-        let targetBgColor = group.bgColor ?? undefined;
-        if (isBalanceDueLine) {
-          targetBgColor = [245 / 255, 245 / 255, 245 / 255]; // #F5F5F5
-        }
-
-        ops.push({
-          text: convertedText,
-          x: bounds.x,
-          y: bounds.baseline,
-          w: bounds.w,
-          h: bounds.h,
-          fontSize: group.fontSize,
-          fontName: group.fontName,
-          fontColor: group.items[0]?.fontColor,
-          bgColor: targetBgColor,
-          isAmount: true,
-        })
-      }
-    }
-  }
-
-  return ops
-}
-
 /**
  * Enhanced currency word replacements with context-aware patterns
  */
@@ -690,146 +590,206 @@ const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
 }
 
 /**
- * Enhanced overlay technique with improved background masking
+ * Unified replacement logic: processes each group once for both amounts and words
+ * to prevent overlapping overlays.
  */
-function createEnhancedBackgroundMask(page: any, op: ReplacementOp) {
-  // Create a slightly larger mask to ensure complete coverage
-  const padding = 0.8
-  const maskX = op.x - padding
-  const maskY = op.y - padding
-  const maskWidth = op.w + (padding * 2)
-  const maskHeight = op.h + (padding * 2)
-
-  const r = op.bgColor ? op.bgColor[0] : 1;
-  const g = op.bgColor ? op.bgColor[1] : 1;
-  const b = op.bgColor ? op.bgColor[2] : 1;
-
-  // Draw the background mask with precise positioning using the extracted color (or white fallback)
-  page.drawRectangle({
-    x: maskX,
-    y: maskY,
-    width: maskWidth,
-    height: maskHeight,
-    color: rgb(r, g, b),
-    opacity: 1.0,
-  })
-}
-
-/**
- * Find text groups containing INR-related words, replace the words within the whole string,
- * and redraw the entire string to avoid shifting/spacing artifacts
- */
-function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementOp[] {
+function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, symbol: string): ReplacementOp[] {
   const ops: ReplacementOp[] = []
   const wordMap = ENHANCED_CURRENCY_WORDS[toCurrency] || CURRENCY_WORDS[toCurrency]
   if (!wordMap) return ops
 
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i]
-    let newText = group.text
-    let hasMatch = false
+    let currentText = group.text
+    let isAmountReplacement = false
+    let matchedAmount: number | null = null
+    let matchedAmountStr = ""
+    let bounds: { x: number; baseline: number; w: number; h: number } | null = null
 
-    // Replace longer words first to avoid partial matches (e.g. "Rupees" before "Rupee")
-    const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
-
-    for (const word of sortedWords) {
-      if (newText.includes(word)) {
-        newText = newText.split(word).join(wordMap[word])
-        hasMatch = true
+    // 1. Try to find a currency amount in this group
+    // Try enhanced patterns first (context-aware)
+    for (const pattern of ENHANCED_AMOUNT_PATTERNS) {
+      const match = group.text.match(pattern)
+      if (match) {
+        const fullMatch = match[0]
+        const amountMatch = fullMatch.match(/[\d,]+(?:\.\d{1,2})?/)
+        if (amountMatch) {
+          const cleaned = amountMatch[0].replace(/[^\d.]/g, "")
+          const num = parseFloat(cleaned)
+          if (!isNaN(num) && num >= 0) {
+            matchedAmount = num
+            matchedAmountStr = amountMatch[0]
+            break
+          }
+        }
       }
     }
 
-    if (hasMatch) {
-      // Look ahead for "Only" on the immediate next line(s) to pull it inline
-      let appendOnly = false;
-      if (i + 1 < groups.length) {
-        const nextGroup = groups[i + 1]
-        const nextTarget = nextGroup.text.trim().toLowerCase()
-        if (nextTarget === "only" || nextTarget === "only." || nextTarget === "only/-") {
-          appendOnly = true;
-          // Erase the old orphaned "Only" by drawing a blank space over its bounding box
-          ops.push({
-            text: "",
-            x: nextGroup.x,
-            y: nextGroup.y,
-            w: nextGroup.totalWidth,
-            h: nextGroup.fontSize,
-            fontSize: nextGroup.fontSize,
-            fontName: group.fontName,
-            fontColor: group.items[0]?.fontColor,
-            isAmount: false,
-          })
-          i++ // skip the "Only" group so we don't process it twice
-        }
-      }
-
-      // Combine the modified main phrase with the "Only" inline
-      let finalCombinedText = appendOnly ? `${newText} Only` : newText;
-
-      // Clean up spacing: Add a space after colons if missing, and collapse multiple spaces 
-      // (e.g. converting "Total In Words:Pound Six Thousand  Only" to "Total In Words: Pound Six Thousand Only")
-      finalCombinedText = finalCombinedText
-        .replace(/:([^\s])/g, ': $1') // Ensure space after colon
-        .replace(/\s{2,}/g, ' '); // Collapse double spaces
-
-      // --- NEW: Professional Wording Refinement (Plurality and Reordering) ---
-      const currencyNamesMap: Record<string, [string, string]> = {
-        "USD": ["US Dollars", "US Dollar"],
-        "EUR": ["Euros", "Euro"],
-        "GBP": ["Pounds", "Pound"],
-        "AED": ["UAE Dirhams", "UAE Dirham"],
-        "SAR": ["Saudi Riyals", "Saudi Riyal"],
-        "SGD": ["Singapore Dollars", "Singapore Dollar"],
-        "AUD": ["Australian Dollars", "Australian Dollar"],
-        "CAD": ["Canadian Dollars", "Canadian Dollar"]
-      };
-
-      const pairs = currencyNamesMap[toCurrency];
-      if (pairs) {
-        const [plural, singular] = pairs;
-        // Naive plurality detection: Check if words include "One" but not "Hundred/Thousand/etc"
-        const wordsLower = finalCombinedText.toLowerCase();
-        const isSingular = (wordsLower.includes(" one ") || wordsLower.endsWith(" one") || wordsLower.includes(" single ")) &&
-          !wordsLower.includes("hundred") && !wordsLower.includes("thousand") &&
-          !wordsLower.includes("lakh") && !wordsLower.includes("crore") &&
-          !wordsLower.includes("million") && !wordsLower.includes("billion");
-
-        const correctName = isSingular ? singular : plural;
-        const otherName = isSingular ? plural : singular;
-
-        // Ensure correct plurality (case-insensitive replacement for both forms)
-        finalCombinedText = finalCombinedText
-          .replace(new RegExp(`\\b${otherName}\\b`, "gi"), correctName)
-          .replace(new RegExp(`\\b${correctName}\\b`, "gi"), correctName);
-
-        // Move currency name to end: "US Dollars Six Thousand Only" -> "Six Thousand US Dollars Only"
-        // Pattern handles optional prefixes like "Total in words:"
-        const moveRegex = new RegExp(`(.*?)\\b(${correctName})\\b\\s+(.*?)\\s+(Only|only|only\\.|only\\/|only\\/\\-)$`, "i");
-        const match = finalCombinedText.match(moveRegex);
+    // fallback to basic patterns
+    if (matchedAmount === null) {
+      for (const pattern of AMOUNT_PATTERNS) {
+        const match = group.text.match(pattern)
         if (match) {
-          // match[1]: Prefix (e.g. "Total In Words: ")
-          // match[2]: Currency Name (e.g. "US Dollars")
-          // match[3]: Numerical Words (e.g. "Six Thousand")
-          // match[4]: Only Suffix (e.g. "Only")
-          finalCombinedText = `${match[1]}${match[3]} ${match[2]} ${match[4]}`;
+          const cleaned = match[0].replace(/[^\d.]/g, "")
+          const num = parseFloat(cleaned)
+          if (!isNaN(num) && num >= 0) {
+            matchedAmount = num
+            matchedAmountStr = match[0]
+            break
+          }
         }
       }
-      // --- END REFINEMENT ---
+    }
 
+    // fallback to plain numbers
+    if (matchedAmount === null) {
+      const plainMatch = group.text.trim().match(PLAIN_NUMBER_PATTERN)
+      if (plainMatch) {
+        const num = parseFloat(plainMatch[0].replace(/,/g, ""))
+        if (!isNaN(num) && num >= 100) {
+          matchedAmount = num
+          matchedAmountStr = plainMatch[0]
+        }
+      }
+    }
 
-      // Issue a single replacement op for the entire line to guarantee seamless spacing
-      ops.push({
-        text: finalCombinedText,
-        x: group.x,
-        y: group.y,
-        w: group.totalWidth, // Mask the entire original line
-        h: group.fontSize,
-        fontSize: group.fontSize,
-        fontName: group.fontName,
-        fontColor: group.items[0]?.fontColor,
-        bgColor: group.bgColor ?? undefined,
-        isAmount: false,
+    // If an amount was found, we'll replace the text with the converted amount
+    if (matchedAmount !== null) {
+      const formattedConverted = matchedAmount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
       })
+      const convertedText = `${symbol}${formattedConverted}`
+      const startIndex = group.text.indexOf(matchedAmountStr)
+      bounds = getEnhancedMatchBounds(group, startIndex, matchedAmountStr.length)
+
+      if (bounds) {
+        isAmountReplacement = true
+        // Only replace the amount portion in our tracking string
+        currentText = currentText.replace(matchedAmountStr, convertedText)
+      }
+    }
+
+    // 2. Regardless of whether an amount was found, apply word replacements to the (potentially updated) text
+    let hasWordMatch = false
+    const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
+    for (const word of sortedWords) {
+      if (currentText.includes(word)) {
+        currentText = currentText.split(word).join(wordMap[word])
+        hasWordMatch = true
+      }
+    }
+
+    if (isAmountReplacement || hasWordMatch) {
+      let finalCombinedText = currentText
+      let appendOnly = false
+
+      // Check context for "Amount in Words" formatting
+      if (hasWordMatch) {
+        // Look ahead for "Only" on the immediate next line
+        if (i + 1 < groups.length) {
+          const nextGroup = groups[i + 1]
+          const nextTarget = nextGroup.text.trim().toLowerCase()
+          if (nextTarget === "only" || nextTarget === "only." || nextTarget === "only/-") {
+            appendOnly = true
+            // Mask the orphaned "Only"
+            ops.push({
+              text: "",
+              x: nextGroup.x,
+              y: nextGroup.y,
+              w: nextGroup.totalWidth,
+              h: nextGroup.fontSize,
+              fontSize: nextGroup.fontSize,
+              fontName: group.fontName,
+              fontColor: group.items[0]?.fontColor,
+              isAmount: false,
+            })
+            i++
+          }
+        }
+
+        if (appendOnly) finalCombinedText = `${finalCombinedText} Only`
+
+        // Clean up spacing
+        finalCombinedText = finalCombinedText
+          .replace(/:([^\s])/g, ': $1')
+          .replace(/\s{2,}/g, ' ')
+
+        // Professional Wording Refinement (Plurality and Reordering)
+        const currencyNamesMap: Record<string, [string, string]> = {
+          "USD": ["US Dollars", "US Dollar"],
+          "EUR": ["Euros", "Euro"],
+          "GBP": ["Pounds", "Pound"],
+          "AED": ["UAE Dirhams", "UAE Dirham"],
+          "SAR": ["Saudi Riyals", "Saudi Riyal"],
+          "SGD": ["Singapore Dollars", "Singapore Dollar"],
+          "AUD": ["Australian Dollars", "Australian Dollar"],
+          "CAD": ["Canadian Dollars", "Canadian Dollar"]
+        };
+
+        const pairs = currencyNamesMap[toCurrency]
+        if (pairs) {
+          const [plural, singular] = pairs
+          const wordsLower = finalCombinedText.toLowerCase()
+          const isSingular = (wordsLower.includes(" one ") || wordsLower.endsWith(" one") || wordsLower.includes(" single ")) &&
+            !wordsLower.includes("hundred") && !wordsLower.includes("thousand") &&
+            !wordsLower.includes("lakh") && !wordsLower.includes("crore") &&
+            !wordsLower.includes("million") && !wordsLower.includes("billion")
+
+          const correctName = isSingular ? singular : plural
+          const otherName = isSingular ? plural : singular
+
+          finalCombinedText = finalCombinedText
+            .replace(new RegExp(`\\b${otherName}\\b`, "gi"), correctName)
+            .replace(new RegExp(`\\b${correctName}\\b`, "gi"), correctName)
+
+          const moveRegex = new RegExp(`(.*?)\\b(${correctName})\\b\\s+(.*?)\\s+(Only|only|only\\.|only\\/|only\\/\\-)$`, "i")
+          const match = finalCombinedText.match(moveRegex)
+          if (match) {
+            finalCombinedText = `${match[1]}${match[3]} ${match[2]} ${match[4]}`
+          }
+        }
+      }
+
+      // 3. Final grouping and displacement logic
+      if (isAmountReplacement && bounds) {
+        // Handle "Balance Due" specific background override
+        const sameLineGroups = groups.filter(g => Math.abs(g.y - group.y) < 5)
+        const lineText = sameLineGroups.map(g => g.text.toLowerCase()).join(" ")
+        const isBalanceDueLine = lineText.includes("balance") && lineText.includes("due")
+        let targetBgColor = group.bgColor ?? undefined
+        if (isBalanceDueLine) {
+          targetBgColor = [245 / 255, 245 / 255, 245 / 255] // #F5F5F5
+        }
+
+        // Amount specific ReplacementOp
+        ops.push({
+          text: finalCombinedText,
+          x: bounds.x,
+          y: bounds.baseline,
+          w: bounds.w,
+          h: bounds.h,
+          fontSize: group.fontSize,
+          fontName: group.fontName,
+          fontColor: group.items[0]?.fontColor,
+          bgColor: targetBgColor,
+          isAmount: true,
+        })
+      } else {
+        // Redraw whole cohesive line for word-only matches
+        ops.push({
+          text: finalCombinedText,
+          x: group.x,
+          y: group.y,
+          w: group.totalWidth,
+          h: group.fontSize,
+          fontSize: group.fontSize,
+          fontName: group.fontName,
+          fontColor: group.items[0]?.fontColor,
+          bgColor: group.bgColor ?? undefined,
+          isAmount: false,
+        })
+      }
     }
   }
 
@@ -971,10 +931,8 @@ export async function POST(req: NextRequest) {
       // Merge adjacent items into groups
       const groups = mergeItemsIntoGroups(pageData.items)
 
-      // Find all replacements for this page
-      const amountOps = findAmountGroups(groups, symbol)
-      const wordOps = findWordGroups(groups, toCurrency)
-      const allOps = [...amountOps, ...wordOps]
+      // Find all replacements for this page in a single pass
+      const allOps = findReplacementsForGroups(groups, toCurrency, symbol)
 
       // Collect all operations for quality assurance
       allConversionOps.push(...allOps)
