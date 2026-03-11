@@ -3,12 +3,14 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib"
 
 // Currency symbols map
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
+  USD: "USD ",
+  EUR: "EUR ",
+  GBP: "GBP ",
   AED: "AED ",
-  SGD: "S$",
-  AUD: "A$",
+  SGD: "SGD ",
+  AUD: "AUD ",
+  CAD: "CAD ",
+  SAR: "SAR ",
 }
 
 // Currency word replacements: INR word → target currency word
@@ -550,24 +552,21 @@ function findAmountGroups(groups: MergedGroup[], symbol: string): ReplacementOp[
  */
 const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
   USD: {
-    // Standard replacements
-    "Indian Rupees": "Dollars", "Indian rupees": "Dollars", "indian rupees": "dollars", "INDIAN RUPEES": "DOLLARS",
-    "Indian Rupee": "Dollar", "Indian rupee": "Dollar", "indian rupee": "dollar", "INDIAN RUPEE": "DOLLAR",
-    "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
-    "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
+    "Indian Rupees": "US Dollars", "Indian rupees": "US Dollars", "indian rupees": "us dollars", "INDIAN RUPEES": "US DOLLARS",
+    "Indian Rupee": "US Dollar", "Indian rupee": "US Dollar", "indian rupee": "us dollar", "INDIAN RUPEE": "US DOLLAR",
+    "Rupees": "US Dollars", "rupees": "us dollars", "RUPEES": "US DOLLARS",
+    "Rupee": "US Dollar", "rupee": "us dollar", "RUPEE": "US DOLLAR",
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
     "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
 
-    // Contextual replacements
-    "Rs": "$", "rs": "$",
-    "Rs.": "$", "rs.": "$",
-    "₹": "$",
+    "Rs": "USD", "rs": "USD",
+    "Rs.": "USD", "rs.": "USD",
+    "₹": "USD",
 
-    // Amount context replacements
-    "Rupees only": "Dollars only",
-    "Rupee only": "Dollar only",
-    "Rupees/-": "Dollars/-",
-    "Rupee/-": "Dollar/-",
+    "Rupees only": "US Dollars only",
+    "Rupee only": "US Dollar only",
+    "Rupees/-": "US Dollars/-",
+    "Rupee/-": "US Dollar/-",
   },
   EUR: {
     "Indian Rupees": "Euros", "Indian rupees": "Euros", "indian rupees": "euros", "INDIAN RUPEES": "EUROS",
@@ -577,9 +576,9 @@ const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
     "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
 
-    "Rs": "€", "rs": "€",
-    "Rs.": "€", "rs.": "€",
-    "₹": "€",
+    "Rs": "EUR", "rs": "EUR",
+    "Rs.": "EUR", "rs.": "EUR",
+    "₹": "EUR",
 
     "Rupees only": "Euros only",
     "Rupee only": "Euro only",
@@ -594,9 +593,9 @@ const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "Paise": "Pence", "paise": "pence", "PAISE": "PENCE",
     "Paisa": "Penny", "paisa": "penny", "PAISA": "PENNY",
 
-    "Rs": "£", "rs": "£",
-    "Rs.": "£", "rs.": "£",
-    "₹": "£",
+    "Rs": "GBP", "rs": "GBP",
+    "Rs.": "GBP", "rs.": "GBP",
+    "₹": "GBP",
 
     "Rupees only": "Pounds only",
     "Rupee only": "Pound only",
@@ -604,10 +603,10 @@ const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "Rupee/-": "Pound/-",
   },
   AED: {
-    "Indian Rupees": "Dirhams", "Indian rupees": "Dirhams", "indian rupees": "dirhams", "INDIAN RUPEES": "DIRHAMS",
-    "Indian Rupee": "Dirham", "Indian rupee": "Dirham", "indian rupee": "dirham", "INDIAN RUPEE": "DIRHAM",
-    "Rupees": "Dirhams", "rupees": "dirhams", "RUPEES": "DIRHAMS",
-    "Rupee": "Dirham", "rupee": "dirham", "RUPEE": "DIRHAM",
+    "Indian Rupees": "UAE Dirhams", "Indian rupees": "UAE Dirhams", "indian rupees": "uae dirhams", "INDIAN RUPEES": "UAE DIRHAMS",
+    "Indian Rupee": "UAE Dirham", "Indian rupee": "UAE Dirham", "indian rupee": "uae dirham", "INDIAN RUPEE": "UAE DIRHAM",
+    "Rupees": "UAE Dirhams", "rupees": "uae dirhams", "RUPEES": "UAE DIRHAMS",
+    "Rupee": "UAE Dirham", "rupee": "uae dirham", "RUPEE": "UAE DIRHAM",
     "Paise": "Fils", "paise": "fils", "PAISE": "FILS",
     "Paisa": "Fil", "paisa": "fil", "PAISA": "FIL",
 
@@ -615,44 +614,78 @@ const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
     "Rs.": "AED", "rs.": "AED",
     "₹": "AED",
 
-    "Rupees only": "Dirhams only",
-    "Rupee only": "Dirham only",
-    "Rupees/-": "Dirhams/-",
-    "Rupee/-": "Dirham/-",
+    "Rupees only": "UAE Dirhams only",
+    "Rupee only": "UAE Dirham only",
+    "Rupees/-": "UAE Dirhams/-",
+    "Rupee/-": "UAE Dirham/-",
   },
   SGD: {
-    "Indian Rupees": "Dollars", "Indian rupees": "Dollars", "indian rupees": "dollars", "INDIAN RUPEES": "DOLLARS",
-    "Indian Rupee": "Dollar", "Indian rupee": "Dollar", "indian rupee": "dollar", "INDIAN RUPEE": "DOLLAR",
-    "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
-    "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
+    "Indian Rupees": "Singapore Dollars", "Indian rupees": "Singapore Dollars", "indian rupees": "singapore dollars", "INDIAN RUPEES": "SINGAPORE DOLLARS",
+    "Indian Rupee": "Singapore Dollar", "Indian rupee": "Singapore Dollar", "indian rupee": "singapore dollar", "INDIAN RUPEE": "SINGAPORE DOLLAR",
+    "Rupees": "Singapore Dollars", "rupees": "singapore dollars", "RUPEES": "SINGAPORE DOLLARS",
+    "Rupee": "Singapore Dollar", "rupee": "singapore dollar", "RUPEE": "SINGAPORE DOLLAR",
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
     "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
 
-    "Rs": "S$", "rs": "S$",
-    "Rs.": "S$", "rs.": "S$",
-    "₹": "S$",
+    "Rs": "SGD", "rs": "SGD",
+    "Rs.": "SGD", "rs.": "SGD",
+    "₹": "SGD",
 
-    "Rupees only": "Dollars only",
-    "Rupee only": "Dollar only",
-    "Rupees/-": "Dollars/-",
-    "Rupee/-": "Dollar/-",
+    "Rupees only": "Singapore Dollars only",
+    "Rupee only": "Singapore Dollar only",
+    "Rupees/-": "Singapore Dollars/-",
+    "Rupee/-": "Singapore Dollar/-",
   },
   AUD: {
-    "Indian Rupees": "Dollars", "Indian rupees": "Dollars", "indian rupees": "dollars", "INDIAN RUPEES": "DOLLARS",
-    "Indian Rupee": "Dollar", "Indian rupee": "Dollar", "indian rupee": "dollar", "INDIAN RUPEE": "DOLLAR",
-    "Rupees": "Dollars", "rupees": "dollars", "RUPEES": "DOLLARS",
-    "Rupee": "Dollar", "rupee": "dollar", "RUPEE": "DOLLAR",
+    "Indian Rupees": "Australian Dollars", "Indian rupees": "Australian Dollars", "indian rupees": "australian dollars", "INDIAN RUPEES": "AUSTRALIAN DOLLARS",
+    "Indian Rupee": "Australian Dollar", "Indian rupee": "Australian Dollar", "indian rupee": "australian dollar", "INDIAN RUPEE": "AUSTRALIAN DOLLAR",
+    "Rupees": "Australian Dollars", "rupees": "australian dollars", "RUPEES": "AUSTRALIAN DOLLARS",
+    "Rupee": "Australian Dollar", "rupee": "australian dollar", "RUPEE": "AUSTRALIAN DOLLAR",
     "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
     "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
 
-    "Rs": "A$", "rs": "A$",
-    "Rs.": "A$", "rs.": "A$",
-    "₹": "A$",
+    "Rs": "AUD", "rs": "AUD",
+    "Rs.": "AUD", "rs.": "AUD",
+    "₹": "AUD",
 
-    "Rupees only": "Dollars only",
-    "Rupee only": "Dollar only",
-    "Rupees/-": "Dollars/-",
-    "Rupee/-": "Dollar/-",
+    "Rupees only": "Australian Dollars only",
+    "Rupee only": "Australian Dollar only",
+    "Rupees/-": "Australian Dollars/-",
+    "Rupee/-": "Australian Dollar/-",
+  },
+  CAD: {
+    "Indian Rupees": "Canadian Dollars", "Indian rupees": "Canadian Dollars", "indian rupees": "canadian dollars", "INDIAN RUPEES": "CANADIAN DOLLARS",
+    "Indian Rupee": "Canadian Dollar", "Indian rupee": "Canadian Dollar", "indian rupee": "canadian dollar", "INDIAN RUPEE": "CANADIAN DOLLAR",
+    "Rupees": "Canadian Dollars", "rupees": "canadian dollars", "RUPEES": "CANADIAN DOLLARS",
+    "Rupee": "Canadian Dollar", "rupee": "canadian dollar", "RUPEE": "CANADIAN DOLLAR",
+    "Paise": "Cents", "paise": "cents", "PAISE": "CENTS",
+    "Paisa": "Cent", "paisa": "cent", "PAISA": "CENT",
+
+    "Rs": "CAD", "rs": "CAD",
+    "Rs.": "CAD", "rs.": "CAD",
+    "₹": "CAD",
+
+    "Rupees only": "Canadian Dollars only",
+    "Rupee only": "Canadian Dollar only",
+    "Rupees/-": "Canadian Dollars/-",
+    "Rupee/-": "Canadian Dollar/-",
+  },
+  SAR: {
+    "Indian Rupees": "Saudi Riyals", "Indian rupees": "Saudi Riyals", "indian rupees": "saudi riyals", "INDIAN RUPEES": "SAUDI RIYALS",
+    "Indian Rupee": "Saudi Riyal", "Indian rupee": "Saudi Riyal", "indian rupee": "saudi riyal", "INDIAN RUPEE": "SAUDI RIYAL",
+    "Rupees": "Saudi Riyals", "rupees": "saudi riyals", "RUPEES": "SAUDI RIYALS",
+    "Rupee": "Saudi Riyal", "rupee": "saudi riyal", "RUPEE": "SAUDI RIYAL",
+    "Paise": "Halalas", "paise": "halalas", "PAISE": "HALALAS",
+    "Paisa": "Halala", "paisa": "halala", "PAISA": "HALALA",
+
+    "Rs": "SAR", "rs": "SAR",
+    "Rs.": "SAR", "rs.": "SAR",
+    "₹": "SAR",
+
+    "Rupees only": "Saudi Riyals only",
+    "Rupee only": "Saudi Riyal only",
+    "Rupees/-": "Saudi Riyals/-",
+    "Rupee/-": "Saudi Riyal/-",
   },
 }
 
@@ -738,6 +771,50 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
       finalCombinedText = finalCombinedText
         .replace(/:([^\s])/g, ': $1') // Ensure space after colon
         .replace(/\s{2,}/g, ' '); // Collapse double spaces
+
+      // --- NEW: Professional Wording Refinement (Plurality and Reordering) ---
+      const currencyNamesMap: Record<string, [string, string]> = {
+        "USD": ["US Dollars", "US Dollar"],
+        "EUR": ["Euros", "Euro"],
+        "GBP": ["Pounds", "Pound"],
+        "AED": ["UAE Dirhams", "UAE Dirham"],
+        "SAR": ["Saudi Riyals", "Saudi Riyal"],
+        "SGD": ["Singapore Dollars", "Singapore Dollar"],
+        "AUD": ["Australian Dollars", "Australian Dollar"],
+        "CAD": ["Canadian Dollars", "Canadian Dollar"]
+      };
+
+      const pairs = currencyNamesMap[toCurrency];
+      if (pairs) {
+        const [plural, singular] = pairs;
+        // Naive plurality detection: Check if words include "One" but not "Hundred/Thousand/etc"
+        const wordsLower = finalCombinedText.toLowerCase();
+        const isSingular = (wordsLower.includes(" one ") || wordsLower.endsWith(" one") || wordsLower.includes(" single ")) &&
+          !wordsLower.includes("hundred") && !wordsLower.includes("thousand") &&
+          !wordsLower.includes("lakh") && !wordsLower.includes("crore") &&
+          !wordsLower.includes("million") && !wordsLower.includes("billion");
+
+        const correctName = isSingular ? singular : plural;
+        const otherName = isSingular ? plural : singular;
+
+        // Ensure correct plurality (case-insensitive replacement for both forms)
+        finalCombinedText = finalCombinedText
+          .replace(new RegExp(`\\b${otherName}\\b`, "gi"), correctName)
+          .replace(new RegExp(`\\b${correctName}\\b`, "gi"), correctName);
+
+        // Move currency name to end: "US Dollars Six Thousand Only" -> "Six Thousand US Dollars Only"
+        // Pattern handles optional prefixes like "Total in words:"
+        const moveRegex = new RegExp(`(.*?)\\b(${correctName})\\b\\s+(.*?)\\s+(Only|only|only\\.|only\\/|only\\/\\-)$`, "i");
+        const match = finalCombinedText.match(moveRegex);
+        if (match) {
+          // match[1]: Prefix (e.g. "Total In Words: ")
+          // match[2]: Currency Name (e.g. "US Dollars")
+          // match[3]: Numerical Words (e.g. "Six Thousand")
+          // match[4]: Only Suffix (e.g. "Only")
+          finalCombinedText = `${match[1]}${match[3]} ${match[2]} ${match[4]}`;
+        }
+      }
+      // --- END REFINEMENT ---
 
 
       // Issue a single replacement op for the entire line to guarantee seamless spacing
@@ -873,9 +950,10 @@ export async function POST(req: NextRequest) {
     // Step 1: Find text positions using pdfjs
     const pagesWithItems = await getTextItemsWithPositions(buffer)
 
-    const symbol = CURRENCY_SYMBOLS[toCurrency] || toCurrency + " "
+    // Step 2: Use currency code as prefix for amounts (e.g. USD 6,000.00)
+    const symbol = toCurrency + " "
 
-    // Step 2: Load the original PDF with pdf-lib
+    // Step 3: Load the original PDF with pdf-lib
     const pdfDoc = await PDFDocument.load(arrayBuffer)
 
     // Performance optimization: Clear font cache for this conversion
