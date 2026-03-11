@@ -89,6 +89,7 @@ interface TextItem {
   fontName: string
   fontSize: number
   fontColor: number[] // [r, g, b] normalized 0-1
+  bgColor: number[] | null // [r, g, b] normalized 0-1 of the underlying block
   isBold: boolean
   isItalic: boolean
 }
@@ -101,6 +102,7 @@ interface MergedGroup {
   totalWidth: number
   fontSize: number
   fontName: string
+  bgColor: number[] | null
 }
 
 /**
@@ -123,6 +125,7 @@ async function getTextItemsWithPositions(buffer: Buffer) {
 
     // Extract font information from the page
     const fontInfo = await extractFontInfo(page)
+    const bgColors = await extractBackgroundColors(page) // array of {y, h, color} objects
 
     const enhancedItems = textContent.items.map((item: any) => {
       // Get font details for this text item
@@ -133,6 +136,17 @@ async function getTextItemsWithPositions(buffer: Buffer) {
         fontColor: [0, 0, 0] // Default black
       }
 
+      // Find the most recent background rect that intersects this item's Y coordinate
+      // PDF Y coordinates usually go from bottom to top, so we check distance
+      const itemY = item.transform[5];
+      let matchedBg: number[] | null = null;
+      for (const bg of bgColors) {
+        // Simple intersection: is the text's Y coordinate roughly inside the drawn background rect?
+        if (itemY >= bg.y - 10 && itemY <= bg.y + bg.h + 10) {
+          matchedBg = bg.color;
+        }
+      }
+
       return {
         str: item.str,
         width: item.width,
@@ -141,6 +155,7 @@ async function getTextItemsWithPositions(buffer: Buffer) {
         fontName: item.fontName,
         fontSize: fontDetails.fontSize,
         fontColor: fontDetails.fontColor,
+        bgColor: matchedBg,
         isBold: fontDetails.isBold,
         isItalic: fontDetails.isItalic
       }
@@ -184,6 +199,50 @@ async function extractFontInfo(page: any): Promise<Map<string, any>> {
 }
 
 /**
+ * Parses the raw drawing operators to find fill Rectangles and their colors.
+ * Used to determine the background color of specific rows (e.g. for invoices with zebra-striping)
+ */
+async function extractBackgroundColors(page: any): Promise<Array<{ y: number, h: number, color: number[] }>> {
+  const backgrounds: Array<{ y: number, h: number, color: number[] }> = []
+
+  try {
+    const resources = await page.getOperatorList()
+    let currentFillRGB: number[] | null = null;
+
+    // PDFJS.OPS maps numbers to operators (e.g., setFillRGBColor, rectangle, fill)
+    for (let i = 0; i < resources.fnArray.length; i++) {
+      const op = resources.fnArray[i]
+      const args = resources.argsArray[i]
+
+      // OPS.setFillRGBColor (usually 28 or 25 depending on the exact PDF.js build)
+      // We'll look for operations with 3 arguments in the RGB range 0-1
+      // and heuristic checking for common background fills
+      if (args && args.length === 3 && typeof args[0] === 'number') {
+        // Basic detection of an RGB color set
+        // Assuming operations like setFillRGBColor
+        currentFillRGB = [args[0], args[1], args[2]]
+      }
+
+      // OPS.constructPath / OPS.rectangle (usually 71)
+      if (op === 71 && args && args.length === 4 && currentFillRGB) {
+        const [x, y, w, h] = args;
+        // Filter out pure white (1,1,1) or pure black (0,0,0) as they are rarely 'row backgrounds'
+        // or we might want to keep white. We'll track everything.
+        backgrounds.push({
+          y: y,
+          h: h,
+          color: currentFillRGB
+        })
+      }
+    }
+  } catch (error) {
+    console.warn("Could not extract background colors:", error)
+  }
+
+  return backgrounds;
+}
+
+/**
  * Analyze font name to determine if it's bold or italic
  */
 function analyzeFontName(fontName: string): { isBold: boolean; isItalic: boolean } {
@@ -218,6 +277,7 @@ function mergeItemsIntoGroups(items: TextItem[]): MergedGroup[] {
     totalWidth: items[0].width,
     fontSize: Math.abs(items[0].transform[0]) || 12,
     fontName: items[0].fontName,
+    bgColor: items[0].bgColor,
   }
 
   for (let i = 1; i < items.length; i++) {
@@ -244,6 +304,7 @@ function mergeItemsIntoGroups(items: TextItem[]): MergedGroup[] {
         totalWidth: item.width,
         fontSize: Math.abs(item.transform[0]) || 12,
         fontName: item.fontName,
+        bgColor: item.bgColor,
       }
     }
   }
@@ -263,6 +324,7 @@ interface ReplacementOp {
   fontSize: number
   fontName: string
   fontColor?: number[]
+  bgColor?: number[]
   isAmount: boolean
 }
 
@@ -585,21 +647,25 @@ const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
 /**
  * Enhanced overlay technique with improved background masking
  */
-function createEnhancedBackgroundMask(page: any, x: number, y: number, width: number, height: number) {
+function createEnhancedBackgroundMask(page: any, op: ReplacementOp) {
   // Create a slightly larger mask to ensure complete coverage
   const padding = 0.8
-  const maskX = x - padding
-  const maskY = y - padding
-  const maskWidth = width + (padding * 2)
-  const maskHeight = height + (padding * 2)
+  const maskX = op.x - padding
+  const maskY = op.y - padding
+  const maskWidth = op.w + (padding * 2)
+  const maskHeight = op.h + (padding * 2)
 
-  // Draw the background mask with precise positioning
+  const r = op.bgColor ? op.bgColor[0] : 1;
+  const g = op.bgColor ? op.bgColor[1] : 1;
+  const b = op.bgColor ? op.bgColor[2] : 1;
+
+  // Draw the background mask with precise positioning using the extracted color (or white fallback)
   page.drawRectangle({
     x: maskX,
     y: maskY,
     width: maskWidth,
     height: maskHeight,
-    color: rgb(1, 1, 1), // Pure white background
+    color: rgb(r, g, b),
     opacity: 1.0,
   })
 }
@@ -672,6 +738,7 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
         fontSize: group.fontSize,
         fontName: group.fontName,
         fontColor: group.items[0]?.fontColor,
+        bgColor: group.bgColor ?? undefined,
         isAmount: false,
       })
     }
@@ -850,13 +917,18 @@ export async function POST(req: NextRequest) {
         const maskY = op.y - descender - 0.5
         const maskH = op.fontSize * 1.05 + 1.0
 
+        // Enhance overlay background color using extracted pdf operation fill color, fallback to white
+        const bgR = op.bgColor ? op.bgColor[0] : 1;
+        const bgG = op.bgColor ? op.bgColor[1] : 1;
+        const bgB = op.bgColor ? op.bgColor[2] : 1;
+
         // Enhanced overlay technique with exact masking
         page.drawRectangle({
           x: maskX,
           y: maskY,
           width: maskW,
           height: maskH,
-          color: rgb(1, 1, 1),
+          color: rgb(bgR, bgG, bgB),
           opacity: 1.0,
         })
 
