@@ -653,7 +653,14 @@ function findWordGroups(groups: MergedGroup[], toCurrency: string): ReplacementO
       }
 
       // Combine the modified main phrase with the "Only" inline
-      const finalCombinedText = appendOnly ? `${newText} Only` : newText;
+      let finalCombinedText = appendOnly ? `${newText} Only` : newText;
+
+      // Clean up spacing: Add a space after colons if missing, and collapse multiple spaces 
+      // (e.g. converting "Total In Words:Pound Six Thousand  Only" to "Total In Words: Pound Six Thousand Only")
+      finalCombinedText = finalCombinedText
+        .replace(/:([^\s])/g, ': $1') // Ensure space after colon
+        .replace(/\s{2,}/g, ' '); // Collapse double spaces
+
 
       // Issue a single replacement op for the entire line to guarantee seamless spacing
       ops.push({
