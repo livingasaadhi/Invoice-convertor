@@ -611,14 +611,14 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
     for (const pattern of ENHANCED_AMOUNT_PATTERNS) {
       const match = group.text.match(pattern)
       if (match) {
-        const fullMatch = match[0]
+        const fullMatch = match[0] // This includes symbols like Rs., ₹, etc.
         const amountMatch = fullMatch.match(/[\d,]+(?:\.\d{1,2})?/)
         if (amountMatch) {
           const cleaned = amountMatch[0].replace(/[^\d.]/g, "")
           const num = parseFloat(cleaned)
           if (!isNaN(num) && num >= 0) {
             matchedAmount = num
-            matchedAmountStr = amountMatch[0]
+            matchedAmountStr = fullMatch // Replace the entire matched string (symbol + amount)
             break
           }
         }
@@ -630,11 +630,12 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
       for (const pattern of AMOUNT_PATTERNS) {
         const match = group.text.match(pattern)
         if (match) {
-          const cleaned = match[0].replace(/[^\d.]/g, "")
+          const fullMatch = match[0]
+          const cleaned = fullMatch.replace(/[^\d.]/g, "")
           const num = parseFloat(cleaned)
           if (!isNaN(num) && num >= 0) {
             matchedAmount = num
-            matchedAmountStr = match[0]
+            matchedAmountStr = fullMatch // Replace the entire matched string (symbol + amount)
             break
           }
         }
