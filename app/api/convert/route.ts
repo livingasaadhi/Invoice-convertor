@@ -328,6 +328,7 @@ interface ReplacementOp {
   fontColor?: number[]
   bgColor?: number[]
   isAmount: boolean
+  isBold?: boolean
 }
 
 function getMatchBounds(group: MergedGroup, matchIndex: number, matchLength: number) {
@@ -676,8 +677,17 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
     const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
     for (const word of sortedWords) {
       if (currentText.includes(word)) {
-        currentText = currentText.split(word).join(wordMap[word])
-        hasWordMatch = true
+        // Use word boundaries for alphanumeric strings to avoid matching inside other words (e.g., "first")
+        const isAlphanumeric = /^[a-zA-Z0-9\s]+$/.test(word);
+        const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = isAlphanumeric 
+          ? new RegExp(`\\b${escapedWord}\\b`, "g") 
+          : new RegExp(escapedWord, "g");
+
+        if (regex.test(currentText)) {
+          currentText = currentText.replace(regex, wordMap[word]);
+          hasWordMatch = true;
+        }
       }
     }
 
@@ -775,6 +785,7 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
           fontColor: group.items[0]?.fontColor,
           bgColor: targetBgColor,
           isAmount: true,
+          isBold: isAmountReplacement && hasWordMatch ? true : false, // BOLD if it's part of Amount in Words
         })
       } else {
         // Redraw whole cohesive line for word-only matches
@@ -789,6 +800,7 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
           fontColor: group.items[0]?.fontColor,
           bgColor: group.bgColor ?? undefined,
           isAmount: false,
+          isBold: hasWordMatch, // BOLD the amount in words
         })
       }
     }
@@ -941,7 +953,7 @@ export async function POST(req: NextRequest) {
       // Apply each replacement using its precise substring bounds
       for (const op of allOps) {
         // Performance optimization: Use cached fonts
-        const isBold = op.fontName.toLowerCase().includes('bold') || op.fontSize >= 14
+        const isBold = op.isBold || op.fontName.toLowerCase().includes('bold') || op.fontSize >= 14
         const isItalic = op.fontName.toLowerCase().includes('italic') || op.fontName.toLowerCase().includes('oblique')
 
         let fontName = 'helvetica'
