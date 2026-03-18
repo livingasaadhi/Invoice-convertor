@@ -590,6 +590,42 @@ const ENHANCED_CURRENCY_WORDS: Record<string, Record<string, string>> = {
   },
 }
 
+interface ColumnBounds {
+  quantity: { x: number; w: number }[]
+  rate: { x: number; w: number }[]
+  amount: { x: number; w: number }[]
+}
+
+/**
+ * Identify column positions based on header text
+ */
+function identifyColumns(groups: MergedGroup[]): ColumnBounds {
+  const bounds: ColumnBounds = { quantity: [], rate: [], amount: [] }
+
+  for (const group of groups) {
+    const text = group.text.toLowerCase().trim()
+
+    // Quantity headers: includes units, hours, hrs, days, qty, etc.
+    if (text === 'qty' || text === 'quantity' || text === 'qnt' || text === 'quant' || text === 'units' || 
+        text === 'hours' || text === 'hrs' || text === 'days' || text === 'number') {
+      bounds.quantity.push({ x: group.x, w: group.totalWidth })
+    }
+    // Rate headers: includes price, unit price, rate, unit cost, etc.
+    else if (text === 'rate' || text === 'price' || text === 'unit price' || text === 'unit-price' || 
+             text === 'unit_price' || text === 'unit cost' || text === 'unit_cost' || text === 'cost/unit') {
+      bounds.rate.push({ x: group.x, w: group.totalWidth })
+    }
+    // Amount headers: includes total, amount, subtotal, balance, net amount, tax, etc.
+    else if (text === 'amount' || text === 'total amount' || text === 'line total' || text === 'total price' || 
+             text === 'total' || text === 'subtotal' || text === 'balance' || text === 'net amount' ||
+             text === 'tax' || text === 'vat' || text === 'gst' || text === 'cgst' || text === 'sgst' || text === 'igst') {
+      bounds.amount.push({ x: group.x, w: group.totalWidth })
+    }
+  }
+
+  return bounds
+}
+
 /**
  * Unified replacement logic: processes each group once for both amounts and words
  * to prevent overlapping overlays.
@@ -599,6 +635,8 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
   const wordMap = ENHANCED_CURRENCY_WORDS[toCurrency] || CURRENCY_WORDS[toCurrency]
   if (!wordMap) return ops
 
+  const columnBounds = identifyColumns(groups)
+
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i]
     let currentText = group.text
@@ -606,6 +644,28 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
     let matchedAmount: number | null = null
     let matchedAmountStr = ""
     let bounds: { x: number; baseline: number; w: number; h: number } | null = null
+
+    // Column-aware filtering: Identify if this group falls under Quantity or Rate columns
+    // We use a generous horizontal overlap check (within 15px of header boundary or centered)
+    const inQuantityCol = columnBounds.quantity.some(b => 
+      (group.x >= b.x - 15 && group.x <= b.x + b.w + 15) || 
+      (group.x + group.totalWidth >= b.x - 15 && group.x + group.totalWidth <= b.x + b.w + 15)
+    )
+    const inRateCol = columnBounds.rate.some(b => 
+      (group.x >= b.x - 15 && group.x <= b.x + b.w + 15) || 
+      (group.x + group.totalWidth >= b.x - 15 && group.x + group.totalWidth <= b.x + b.w + 15)
+    )
+    const inAmountCol = columnBounds.amount.some(b => 
+      (group.x >= b.x - 15 && group.x <= b.x + b.w + 15) || 
+      (group.x + group.totalWidth >= b.x - 15 && group.x + group.totalWidth <= b.x + b.w + 15)
+    )
+
+    // Check context: Is this a "Total" line? (Totals should always be converted regardless of column alignment)
+    const lowerText = group.text.toLowerCase()
+    const isTotalContext = lowerText.includes("total") || 
+                          lowerText.includes("subtotal") || 
+                          lowerText.includes("balance") || 
+                          lowerText.includes("grand")
 
     // 1. Try to find a currency amount in this group
     // Try enhanced patterns first (context-aware)
@@ -618,6 +678,18 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
           const cleaned = amountMatch[0].replace(/[^\d.]/g, "")
           const num = parseFloat(cleaned)
           if (!isNaN(num) && num >= 0) {
+            // Apply strict user mandate: NEVER convert quantity or rate columns
+            if (inQuantityCol || inRateCol) {
+              continue
+            }
+
+            // If it's in the amount column, we definitely convert.
+            // If it's not in any known column, we only convert if it has an explicit symbol or is a total.
+            const hasExplicitSymbol = fullMatch.includes('₹') || fullMatch.toLowerCase().includes('inr') || fullMatch.toLowerCase().includes('rs')
+            if (!inAmountCol && !hasExplicitSymbol && !isTotalContext) {
+              continue
+            }
+
             matchedAmount = num
             matchedAmountStr = fullMatch // Replace the entire matched string (symbol + amount)
             break
@@ -635,6 +707,12 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
           const cleaned = fullMatch.replace(/[^\d.]/g, "")
           const num = parseFloat(cleaned)
           if (!isNaN(num) && num >= 0) {
+            // Apply strict user mandate: NEVER convert quantity or rate columns
+            if (inQuantityCol || inRateCol) {
+              continue
+            }
+
+            // Only convert if it's in amount column or is a total context (basic patterns always have a symbol)
             matchedAmount = num
             matchedAmountStr = fullMatch // Replace the entire matched string (symbol + amount)
             break
@@ -649,6 +727,16 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
       if (plainMatch) {
         const num = parseFloat(plainMatch[0].replace(/,/g, ""))
         if (!isNaN(num) && num >= 100) {
+          // Apply strict user mandate: NEVER convert quantity or rate columns
+          if (inQuantityCol || inRateCol) {
+            continue
+          }
+
+          // For plain numbers (no symbols), only convert if in amount column or total context
+          if (!inAmountCol && !isTotalContext) {
+            continue
+          }
+
           matchedAmount = num
           matchedAmountStr = plainMatch[0]
         }
@@ -673,20 +761,23 @@ function findReplacementsForGroups(groups: MergedGroup[], toCurrency: string, sy
     }
 
     // 2. Regardless of whether an amount was found, apply word replacements to the (potentially updated) text
+    // Apply strict user mandate: NEVER convert quantity or rate columns
     let hasWordMatch = false
-    const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
-    for (const word of sortedWords) {
-      if (currentText.includes(word)) {
-        // Use word boundaries for alphanumeric strings to avoid matching inside other words (e.g., "first")
-        const isAlphanumeric = /^[a-zA-Z0-9\s]+$/.test(word);
-        const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = isAlphanumeric 
-          ? new RegExp(`\\b${escapedWord}\\b`, "g") 
-          : new RegExp(escapedWord, "g");
+    if (!inQuantityCol && !inRateCol) {
+      const sortedWords = Object.keys(wordMap).sort((a, b) => b.length - a.length)
+      for (const word of sortedWords) {
+        if (currentText.includes(word)) {
+          // Use word boundaries for alphanumeric strings to avoid matching inside other words (e.g., "first")
+          const isAlphanumeric = /^[a-zA-Z0-9\s]+$/.test(word);
+          const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = isAlphanumeric 
+            ? new RegExp(`\\b${escapedWord}\\b`, "g") 
+            : new RegExp(escapedWord, "g");
 
-        if (regex.test(currentText)) {
-          currentText = currentText.replace(regex, wordMap[word]);
-          hasWordMatch = true;
+          if (regex.test(currentText)) {
+            currentText = currentText.replace(regex, wordMap[word]);
+            hasWordMatch = true;
+          }
         }
       }
     }
@@ -934,7 +1025,7 @@ export async function POST(req: NextRequest) {
 
     const pages = pdfDoc.getPages()
     let totalReplacements = 0
-    let allConversionOps: ReplacementOp[] = []
+    const allConversionOps: ReplacementOp[] = []
 
     // Step 3: For each page, merge items, find amounts, overlay converted values
     for (const pageData of pagesWithItems) {
